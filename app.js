@@ -585,6 +585,19 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/kaimono-app/sw.js');
 }
 
+// --- 位置情報の自動検出 ---
+function autoDetectLocation() {
+  if (navigator.geolocation) detectLocation();
+}
+
+// アプリ起動時
+window.addEventListener('load', () => setTimeout(autoDetectLocation, 1000));
+
+// バックグラウンドから復帰した時
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') autoDetectLocation();
+});
+
 // --- Init ---
 syncFormUI();
 renderLocationBanner();
