@@ -47,7 +47,6 @@
             <option value="スーパー">🏪 スーパー</option>
             <option value="薬局">💊 薬局</option>
             <option value="ホームセンター">🔨 ホームセンター</option>
-            <option value="コンビニ">🏬 コンビニ</option>
             <option value="その他">📦 その他</option>
           </select>
         </div>
@@ -59,6 +58,39 @@
     </form>
 
     <div id="lists-container"></div>
+  </div>
+
+  <!-- Bottom Tab Bar -->
+  <nav id="bottom-tabs">
+    <button class="tab-btn active" data-tab="全部">
+      <span class="tab-icon">🛒</span>
+      <span class="tab-label">全部</span>
+    </button>
+    <button class="tab-btn" data-tab="スーパー">
+      <span class="tab-icon">🏪</span>
+      <span class="tab-label">スーパー</span>
+    </button>
+    <button class="tab-btn" data-tab="薬局">
+      <span class="tab-icon">💊</span>
+      <span class="tab-label">薬局</span>
+    </button>
+    <button class="tab-btn" data-tab="ホームセンター">
+      <span class="tab-icon">🔨</span>
+      <span class="tab-label">DIY</span>
+    </button>
+  </nav>
+
+  <!-- Tag Edit Modal -->
+  <div id="edit-modal" class="hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <h3 id="edit-modal-title"></h3>
+      <div id="edit-tag-list"></div>
+      <div class="modal-actions">
+        <button id="edit-cancel-btn">キャンセル</button>
+        <button id="edit-save-btn">保存</button>
+      </div>
+    </div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>

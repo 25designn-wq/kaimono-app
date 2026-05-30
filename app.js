@@ -30,7 +30,6 @@ const CATEGORIES = [
   { value: 'スーパー',       emoji: '🏪' },
   { value: '薬局',           emoji: '💊' },
   { value: 'ホームセンター', emoji: '🔨' },
-  { value: 'コンビニ',       emoji: '🏬' },
   { value: 'その他',         emoji: '📦' },
 ];
 
@@ -41,7 +40,6 @@ const PLACES_TYPE_MAP = [
   { types: ['supermarket', 'grocery_store'],          category: 'スーパー'       },
   { types: ['pharmacy', 'drugstore'],                  category: '薬局'           },
   { types: ['hardware_store', 'home_goods_store'],     category: 'ホームセンター' },
-  { types: ['convenience_store'],                      category: 'コンビニ'       },
 ];
 
 const ALL_PLACES_TYPES = PLACES_TYPE_MAP.flatMap(m => m.types);
@@ -73,6 +71,7 @@ function checkRateLimit() {
 
 let items       = [];
 let activeStore = localStorage.getItem(ACTIVE_STORE_KEY) || null;
+let activeTab   = '全部';
 let isAdding    = false;
 
 // Firestoreからリアルタイムで同期
@@ -128,14 +127,14 @@ async function categorizeWithGemini(name) {
 
 商品名: 「${name}」
 
-選択肢: スーパー, 薬局, ホームセンター, コンビニ, その他
+選択肢: スーパー, 薬局, ホームセンター, その他
 
 JSON配列のみを返してください（他の文字は不要）。
 
 例:
-- 「牛乳」→ ["スーパー", "コンビニ"]
-- 「絆創膏」→ ["薬局", "コンビニ"]
-- 「ラップ」→ ["スーパー", "ホームセンター", "コンビニ"]
+- 「牛乳」→ ["スーパー"]
+- 「絆創膏」→ ["薬局"]
+- 「ラップ」→ ["スーパー", "ホームセンター"]
 - 「釘」→ ["ホームセンター"]`;
 
   const res = await fetch(
@@ -259,8 +258,18 @@ function renderLocationBanner() {
   banner.className = 'location-banner active';
   banner.innerHTML = `
     <span>${cat.emoji} <strong>${escapeHtml(activeStore)}</strong> 付近にいます</span>
-    <button onclick="clearActiveStore()">解除</button>
+    <div class="banner-actions">
+      <button onclick="switchToStoreTab()">切り替え</button>
+      <button onclick="clearActiveStore()">解除</button>
+    </div>
   `;
+}
+
+function switchToStoreTab() {
+  if (activeStore) {
+    activeTab = activeStore;
+    render();
+  }
 }
 
 // --- Form: APIキー有無で表示切替 ---
@@ -271,77 +280,134 @@ function syncFormUI() {
   document.getElementById('ai-indicator').classList.toggle('hidden', !hasKey);
 }
 
+// --- Tag Edit Modal ---
+
+function openEditModal(item) {
+  const modal   = document.getElementById('edit-modal');
+  const title   = document.getElementById('edit-modal-title');
+  const tagList = document.getElementById('edit-tag-list');
+
+  title.textContent = `「${item.name}」のタグを編集`;
+  tagList.innerHTML = '';
+
+  CATEGORIES.forEach(cat => {
+    const label = document.createElement('label');
+    label.className = 'tag-checkbox-row';
+    const checked = item.categories.includes(cat.value);
+    label.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(cat.value)}" ${checked ? 'checked' : ''}>
+      <span>${cat.emoji} ${escapeHtml(cat.value)}</span>
+    `;
+    tagList.appendChild(label);
+  });
+
+  modal.classList.remove('hidden');
+
+  document.getElementById('edit-cancel-btn').onclick = () => modal.classList.add('hidden');
+  document.querySelector('.modal-overlay').onclick    = () => modal.classList.add('hidden');
+
+  document.getElementById('edit-save-btn').onclick = async () => {
+    const checked = [...tagList.querySelectorAll('input:checked')].map(cb => cb.value);
+    await itemsRef.doc(item.id).update({ categories: checked.length ? checked : ['その他'] });
+    modal.classList.add('hidden');
+  };
+}
+
 // --- Render ---
+
+function addLongPress(el, callback) {
+  let timer;
+  el.addEventListener('touchstart', () => { timer = setTimeout(callback, 500); }, { passive: true });
+  el.addEventListener('touchend',   () => clearTimeout(timer), { passive: true });
+  el.addEventListener('touchmove',  () => clearTimeout(timer), { passive: true });
+  el.addEventListener('dblclick', callback);
+}
+
+function createItemEl(item, hiddenCategory) {
+  const li = document.createElement('li');
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'item-name';
+  nameEl.textContent = item.name;
+
+  const badgesEl = document.createElement('span');
+  badgesEl.className = 'cat-badges';
+  item.categories
+    .filter(c => c !== hiddenCategory)
+    .forEach(c => {
+      const cat = CATEGORIES.find(x => x.value === c);
+      if (!cat) return;
+      const badge = document.createElement('span');
+      badge.className = 'cat-badge';
+      badge.textContent = `${cat.emoji} ${c}`;
+      badgesEl.appendChild(badge);
+    });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'delete-btn';
+  delBtn.textContent = '✕';
+  delBtn.setAttribute('aria-label', '削除');
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (confirm(`「${item.name}」を削除しますか？`)) deleteItem(item.id);
+  });
+
+  li.appendChild(nameEl);
+  if (badgesEl.children.length > 0) li.appendChild(badgesEl);
+  li.appendChild(delBtn);
+
+  addLongPress(li, () => openEditModal(item));
+
+  return li;
+}
+
+function makeSection(title, itemList, className = '') {
+  const section = document.createElement('div');
+  section.className = `category-section${className ? ' ' + className : ''}`;
+  section.innerHTML = `
+    <div class="category-header">
+      <h2>${title}</h2>
+      <span class="category-count">${itemList.length}点</span>
+    </div>
+    <ul class="item-list"></ul>`;
+  return section;
+}
 
 function render() {
   const container = document.getElementById('lists-container');
   container.innerHTML = '';
 
-  if (items.length === 0) {
+  // タブの見た目を更新
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === activeTab);
+  });
+
+  const filtered = activeTab === '全部'
+    ? items
+    : items.filter(i => i.categories.includes(activeTab));
+
+  if (filtered.length === 0) {
+    const msg = activeTab === '全部' ? '商品を追加してください' : `${activeTab}の商品はありません`;
     container.innerHTML = `
       <div class="empty-state">
         <div style="font-size:48px">🛒</div>
-        <p>商品を追加してください</p>
+        <p>${msg}</p>
       </div>`;
     return;
   }
 
-  const sorted = activeStore
-    ? [...CATEGORIES.filter(c => c.value === activeStore), ...CATEGORIES.filter(c => c.value !== activeStore)]
-    : CATEGORIES;
+  const hiddenCat = activeTab === '全部' ? null : activeTab;
+  const isNearThisStore = activeStore && activeStore === activeTab;
+  const cat = CATEGORIES.find(c => c.value === activeTab);
 
-  sorted.forEach(({ value, emoji }) => {
-    const catItems = items.filter(i => i.categories.includes(value));
-    if (catItems.length === 0) return;
+  const title = activeTab === '全部'
+    ? '🛒 買い物リスト'
+    : `${cat.emoji} ${escapeHtml(activeTab)}${isNearThisStore ? ' <span class="here-badge">📍 ここ</span>' : ''}`;
 
-    const isActive = value === activeStore;
-    const section  = document.createElement('div');
-    section.className = `category-section${isActive ? ' active-store' : ''}`;
-
-    const hereBadge = isActive ? '<span class="here-badge">📍 ここ</span>' : '';
-    section.innerHTML = `
-      <div class="category-header">
-        <h2>${escapeHtml(emoji)} ${escapeHtml(value)} ${hereBadge}</h2>
-        <span class="category-count">${catItems.length}点</span>
-      </div>
-      <ul class="item-list"></ul>`;
-
-    const ul = section.querySelector('.item-list');
-
-    catItems.forEach(item => {
-      const li = document.createElement('li');
-
-      const nameEl = document.createElement('span');
-      nameEl.className = 'item-name';
-      nameEl.textContent = item.name;
-
-      const otherCats = item.categories.filter(c => c !== value);
-      const badgesEl  = document.createElement('span');
-      badgesEl.className = 'cat-badges';
-      otherCats.forEach(c => {
-        const cat   = CATEGORIES.find(x => x.value === c);
-        const badge = document.createElement('span');
-        badge.className   = 'cat-badge';
-        badge.textContent = `${cat.emoji} ${c}`;
-        badgesEl.appendChild(badge);
-      });
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'delete-btn';
-      delBtn.textContent = '✕';
-      delBtn.setAttribute('aria-label', '削除');
-      delBtn.addEventListener('click', () => {
-        if (confirm(`「${item.name}」を削除しますか？`)) deleteItem(item.id);
-      });
-
-      li.appendChild(nameEl);
-      if (otherCats.length) li.appendChild(badgesEl);
-      li.appendChild(delBtn);
-      ul.appendChild(li);
-    });
-
-    container.appendChild(section);
-  });
+  const section = makeSection(title, filtered, isNearThisStore ? 'active-store' : '');
+  const ul = section.querySelector('.item-list');
+  filtered.forEach(item => ul.appendChild(createItemEl(item, hiddenCat)));
+  container.appendChild(section);
 }
 
 function escapeHtml(str) {
@@ -405,6 +471,14 @@ document.getElementById('add-form').addEventListener('submit', async e => {
   addItem(name, categories);
   input.value = '';
   input.focus();
+});
+
+// --- Bottom tabs ---
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeTab = btn.dataset.tab;
+    render();
+  });
 });
 
 // --- Init ---
