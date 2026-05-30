@@ -598,7 +598,31 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') autoDetectLocation();
 });
 
+// --- URLパラメータから自動追加 ---
+async function checkUrlAdd() {
+  const params = new URLSearchParams(window.location.search);
+  const name = params.get('add');
+  if (!name) return;
+
+  // URLからパラメータを消す
+  window.history.replaceState({}, '', window.location.pathname);
+
+  const key = getApiKey();
+  let categories;
+  if (key) {
+    try {
+      categories = await categorizeWithGemini(name) ?? ['その他'];
+    } catch {
+      categories = ['その他'];
+    }
+  } else {
+    categories = ['その他'];
+  }
+  await addItem(name, categories);
+}
+
 // --- Init ---
 syncFormUI();
 renderLocationBanner();
 render();
+checkUrlAdd();
