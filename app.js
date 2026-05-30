@@ -52,7 +52,7 @@ function getApiKey() {
 }
 
 function getPlacesKey() {
-  return localStorage.getItem(PLACES_KEY_STORAGE) || '';
+  return localStorage.getItem(PLACES_KEY_STORAGE) || 'AIzaSyA3cxPjLk5316lkvgaZABhSTCGr8khJhq8';
 }
 
 // --- Rate limiter (Places API 暴走防止) ---
