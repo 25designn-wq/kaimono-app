@@ -323,6 +323,55 @@ function addLongPress(el, callback) {
   el.addEventListener('dblclick', callback);
 }
 
+function addSwipeDelete(li, item) {
+  let startX = 0;
+  let startY = 0;
+  let deltaX = 0;
+  let tracking = false;
+
+  li.addEventListener('touchstart', e => {
+    startX  = e.touches[0].clientX;
+    startY  = e.touches[0].clientY;
+    deltaX  = 0;
+    tracking = false;
+    li.style.transition = 'none';
+  }, { passive: true });
+
+  li.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!tracking && Math.abs(dx) > Math.abs(dy) && dx > 8) tracking = true;
+    if (!tracking) return;
+    deltaX = Math.max(0, dx);
+    li.style.transform = `translateX(${deltaX}px)`;
+    li.style.opacity   = String(Math.max(0, 1 - deltaX / 150));
+  }, { passive: true });
+
+  li.addEventListener('touchend', () => {
+    if (deltaX > 80) {
+      li.style.transition = 'transform 0.15s ease, opacity 0.15s ease';
+      li.style.transform  = 'translateX(120%)';
+      li.style.opacity    = '0';
+      setTimeout(() => {
+        li.style.transition  = 'max-height 0.15s ease, padding 0.15s ease';
+        li.style.maxHeight   = li.offsetHeight + 'px';
+        li.style.overflow    = 'hidden';
+        requestAnimationFrame(() => {
+          li.style.maxHeight = '0';
+          li.style.padding   = '0';
+          li.style.borderBottom = 'none';
+        });
+        setTimeout(() => deleteItem(item.id), 150);
+      }, 150);
+    } else {
+      li.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+      li.style.transform  = '';
+      li.style.opacity    = '';
+    }
+    deltaX = 0;
+  });
+}
+
 function createItemEl(item, hiddenCategory) {
   const li = document.createElement('li');
 
@@ -357,6 +406,7 @@ function createItemEl(item, hiddenCategory) {
   li.appendChild(delBtn);
 
   addLongPress(li, () => openEditModal(item));
+  addSwipeDelete(li, item);
 
   return li;
 }
