@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>買い物メモ</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>🛒 買い物メモ</h1>
+      <div class="header-actions">
+        <button id="location-btn" class="icon-btn" title="現在地の店舗を検出">📍</button>
+        <button id="settings-btn" class="icon-btn" title="設定">⚙️</button>
+      </div>
+    </header>
+
+    <div id="settings-panel" class="hidden">
+      <div class="settings-body">
+        <p class="settings-label">Google API キー（カテゴリ自動判定 + 店舗検索）</p>
+        <div class="api-key-row">
+          <input type="password" id="api-key-input" placeholder="AIzaSy..." />
+          <button id="save-key-btn">保存</button>
+        </div>
+        <a class="settings-link" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">
+          Google Cloud Console でキーを作成 →
+        </a>
+      </div>
+    </div>
+
+    <div id="location-banner" class="hidden"></div>
+
+    <form id="add-form">
+      <div class="form-row">
+        <input
+          type="text"
+          id="item-input"
+          placeholder="商品名を入力..."
+          autocomplete="off"
+          required
+        />
+      </div>
+      <div class="form-row">
+        <div id="category-select-wrap">
+          <select id="category-select">
+            <option value="スーパー">🏪 スーパー</option>
+            <option value="薬局">💊 薬局</option>
+            <option value="ホームセンター">🔨 ホームセンター</option>
+            <option value="コンビニ">🏬 コンビニ</option>
+            <option value="その他">📦 その他</option>
+          </select>
+        </div>
+        <div id="ai-indicator" class="hidden">
+          <span class="ai-badge">✨ AI自動判定</span>
+        </div>
+        <button type="submit" id="add-btn">追加</button>
+      </div>
+    </form>
+
+    <div id="lists-container"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
