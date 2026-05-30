@@ -145,7 +145,7 @@ JSON配列のみを返してください（他の文字は不要）。
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 80 },
+        generationConfig: { temperature: 0, maxOutputTokens: 500 },
       }),
     }
   );
