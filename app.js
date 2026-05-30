@@ -48,7 +48,7 @@ const ALL_PLACES_TYPES = PLACES_TYPE_MAP.flatMap(m => m.types);
 // --- Storage helpers (localStorage は APIキー・店舗設定のみ残す) ---
 
 function getApiKey() {
-  return localStorage.getItem(API_KEY_STORAGE) || '';
+  return localStorage.getItem(API_KEY_STORAGE) || 'AQ.Ab8RN6IrOK21YWE7Mh0kvgWxq1jMWnVzn1f8pvrddjldOAzx-A';
 }
 
 function getPlacesKey() {
