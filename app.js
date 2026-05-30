@@ -1,5 +1,19 @@
 'use strict';
 
+// --- Firebase ---
+
+firebase.initializeApp({
+  apiKey:            "AIzaSyARAEi3bziwHcse4AirSci-mBr18_BKH2I",
+  authDomain:        "kaimono-app-e830b.firebaseapp.com",
+  projectId:         "kaimono-app-e830b",
+  storageBucket:     "kaimono-app-e830b.firebasestorage.app",
+  messagingSenderId: "882067349627",
+  appId:             "1:882067349627:web:40d8d298c731b65ced82de",
+});
+
+const db       = firebase.firestore();
+const itemsRef = db.collection('items');
+
 // --- Constants ---
 
 const STORAGE_KEY      = 'kaimono_items';
@@ -32,24 +46,7 @@ const PLACES_TYPE_MAP = [
 
 const ALL_PLACES_TYPES = PLACES_TYPE_MAP.flatMap(m => m.types);
 
-// --- Storage helpers ---
-
-function loadItems() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? [];
-    // 旧フォーマット（category 単体）をマイグレーション
-    return raw.map(item => ({
-      ...item,
-      categories: item.categories ?? (item.category ? [item.category] : ['その他']),
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function saveItems() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
+// --- Storage helpers (localStorage は APIキー・店舗設定のみ残す) ---
 
 function getApiKey() {
   return localStorage.getItem(API_KEY_STORAGE) || '';
@@ -74,22 +71,32 @@ function checkRateLimit() {
 
 // --- App state ---
 
-let items       = loadItems();
+let items       = [];
 let activeStore = localStorage.getItem(ACTIVE_STORE_KEY) || null;
 let isAdding    = false;
 
+// Firestoreからリアルタイムで同期
+itemsRef.orderBy('createdAt').onSnapshot(snapshot => {
+  items = snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    categories: doc.data().categories ?? ['その他'],
+  }));
+  render();
+});
+
 // --- Item management ---
 
-function addItem(name, categories) {
-  items.push({ id: Date.now(), name: name.trim(), categories });
-  saveItems();
-  render();
+async function addItem(name, categories) {
+  await itemsRef.add({
+    name:      name.trim(),
+    categories,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
-function deleteItem(id) {
-  items = items.filter(i => i.id !== id);
-  saveItems();
-  render();
+async function deleteItem(id) {
+  await itemsRef.doc(id).delete();
 }
 
 // --- Active store ---
