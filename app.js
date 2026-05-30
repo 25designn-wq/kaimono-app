@@ -510,7 +510,7 @@ document.getElementById('save-places-key-btn').addEventListener('click', () => {
   setTimeout(() => { btn.textContent = '保存'; }, 2000);
 });
 
-document.getElementById('location-btn').addEventListener('click', detectLocation);
+document.getElementById('location-btn')?.addEventListener('click', detectLocation);
 
 // --- 音声入力 ---
 const micBtn = document.getElementById('mic-btn');
