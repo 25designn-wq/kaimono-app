@@ -217,6 +217,29 @@ header h1 {
   border-color: var(--primary-light);
 }
 
+#mic-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  padding: 10px 12px;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#mic-btn.recording {
+  border-color: #c0392b;
+  color: #c0392b;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 #category-select-wrap {
   flex: 1;
 }

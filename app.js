@@ -512,6 +512,31 @@ document.getElementById('save-places-key-btn').addEventListener('click', () => {
 
 document.getElementById('location-btn').addEventListener('click', detectLocation);
 
+// --- 音声入力 ---
+const micBtn = document.getElementById('mic-btn');
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.interimResults = false;
+
+  recognition.onresult = e => {
+    document.getElementById('item-input').value = e.results[0][0].transcript;
+    micBtn.classList.remove('recording');
+  };
+
+  recognition.onerror = () => micBtn.classList.remove('recording');
+  recognition.onend   = () => micBtn.classList.remove('recording');
+
+  micBtn.addEventListener('click', () => {
+    micBtn.classList.add('recording');
+    recognition.start();
+  });
+} else {
+  micBtn.style.display = 'none';
+}
+
 document.getElementById('add-form').addEventListener('submit', async e => {
   e.preventDefault();
   if (isAdding) return;
