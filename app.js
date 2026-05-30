@@ -178,7 +178,11 @@ async function detectLocation() {
     const pos = await new Promise((resolve, reject) =>
       navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
     );
-    const { latitude: lat, longitude: lng } = pos.coords;
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+    if (accuracy > 50) {
+      showLocationError(`GPS精度が低すぎます（誤差${Math.round(accuracy)}m）`);
+      return;
+    }
     const store = await queryNearestStore(lat, lng);
 
     if (store) {
@@ -221,7 +225,7 @@ async function queryNearestStore(lat, lng) {
       locationRestriction: {
         circle: {
           center: { latitude: lat, longitude: lng },
-          radius: 500,
+          radius: 150,
         },
       },
       maxResultCount: 10,
