@@ -16,10 +16,11 @@ const itemsRef = db.collection('items');
 
 // --- Constants ---
 
-const STORAGE_KEY      = 'kaimono_items';
-const API_KEY_STORAGE  = 'kaimono_google_api_key';
-const ACTIVE_STORE_KEY = 'kaimono_active_store';
-const RATE_LIMIT_KEY   = 'kaimono_places_rate';
+const STORAGE_KEY         = 'kaimono_items';
+const API_KEY_STORAGE     = 'kaimono_google_api_key';
+const PLACES_KEY_STORAGE  = 'kaimono_places_api_key';
+const ACTIVE_STORE_KEY    = 'kaimono_active_store';
+const RATE_LIMIT_KEY      = 'kaimono_places_rate';
 const GEMINI_MODEL     = 'gemini-2.5-flash';
 
 // 1日あたりの Places API 呼び出し上限・クールダウン
@@ -48,6 +49,10 @@ const ALL_PLACES_TYPES = PLACES_TYPE_MAP.flatMap(m => m.types);
 
 function getApiKey() {
   return localStorage.getItem(API_KEY_STORAGE) || '';
+}
+
+function getPlacesKey() {
+  return localStorage.getItem(PLACES_KEY_STORAGE) || '';
 }
 
 // --- Rate limiter (Places API 暴走防止) ---
@@ -193,9 +198,9 @@ async function detectLocation() {
 }
 
 async function queryNearestStore(lat, lng) {
-  const key = getApiKey();
+  const key = getPlacesKey();
   if (!key) {
-    showLocationError('API キーを設定してください');
+    showLocationError('Places APIキーを設定してください');
     return null;
   }
 
@@ -476,7 +481,10 @@ function escapeHtml(str) {
 document.getElementById('settings-btn').addEventListener('click', () => {
   const panel = document.getElementById('settings-panel');
   const isHidden = panel.classList.toggle('hidden');
-  if (!isHidden) document.getElementById('api-key-input').value = getApiKey();
+  if (!isHidden) {
+    document.getElementById('api-key-input').value    = getApiKey();
+    document.getElementById('places-key-input').value = getPlacesKey();
+  }
 });
 
 document.getElementById('save-key-btn').addEventListener('click', () => {
@@ -485,6 +493,15 @@ document.getElementById('save-key-btn').addEventListener('click', () => {
   syncFormUI();
   document.getElementById('settings-panel').classList.add('hidden');
   const btn = document.getElementById('save-key-btn');
+  btn.textContent = '✓ 保存';
+  setTimeout(() => { btn.textContent = '保存'; }, 2000);
+});
+
+document.getElementById('save-places-key-btn').addEventListener('click', () => {
+  const key = document.getElementById('places-key-input').value.trim();
+  localStorage.setItem(PLACES_KEY_STORAGE, key);
+  document.getElementById('settings-panel').classList.add('hidden');
+  const btn = document.getElementById('save-places-key-btn');
   btn.textContent = '✓ 保存';
   setTimeout(() => { btn.textContent = '保存'; }, 2000);
 });

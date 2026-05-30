@@ -18,10 +18,15 @@
 
     <div id="settings-panel" class="hidden">
       <div class="settings-body">
-        <p class="settings-label">Google API キー（カテゴリ自動判定 + 店舗検索）</p>
+        <p class="settings-label">Gemini APIキー（カテゴリ自動判定）</p>
         <div class="api-key-row">
-          <input type="password" id="api-key-input" placeholder="AIzaSy..." />
+          <input type="password" id="api-key-input" placeholder="AQ...." />
           <button id="save-key-btn">保存</button>
+        </div>
+        <p class="settings-label">Places APIキー（近くの店舗検索）</p>
+        <div class="api-key-row">
+          <input type="password" id="places-key-input" placeholder="AIzaSy..." />
+          <button id="save-places-key-btn">保存</button>
         </div>
         <a class="settings-link" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">
           Google Cloud Console でキーを作成 →
