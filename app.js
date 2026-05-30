@@ -401,9 +401,12 @@ function createItemEl(item, hiddenCategory) {
     if (confirm(`「${item.name}」を削除しますか？`)) deleteItem(item.id);
   });
 
-  li.appendChild(nameEl);
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.appendChild(nameEl);
+  row.appendChild(delBtn);
+  li.appendChild(row);
   if (badgesEl.children.length > 0) li.appendChild(badgesEl);
-  li.appendChild(delBtn);
 
   addLongPress(li, () => openEditModal(item));
   addSwipeDelete(li, item);
