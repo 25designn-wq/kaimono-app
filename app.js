@@ -388,7 +388,7 @@ function createItemEl(item, hiddenCategory) {
       if (!cat) return;
       const badge = document.createElement('span');
       badge.className = 'cat-badge';
-      badge.textContent = `${cat.emoji} ${c}`;
+      badge.textContent = cat.emoji;
       badgesEl.appendChild(badge);
     });
 

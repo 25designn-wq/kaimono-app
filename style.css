@@ -384,12 +384,9 @@ header h1 {
 }
 
 .cat-badge {
-  font-size: 11px;
-  padding: 2px 7px;
-  background: #f5f5f5;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-secondary);
+  font-size: 16px;
+  padding: 1px 4px;
+  border-radius: 6px;
   white-space: nowrap;
 }
 
@@ -467,7 +464,8 @@ header h1 {
 }
 
 .tab-label {
-  display: none;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 /* Tag Edit Modal */
