@@ -580,6 +580,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+// --- Service Worker ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/kaimono-app/sw.js');
+}
+
 // --- Init ---
 syncFormUI();
 renderLocationBanner();
