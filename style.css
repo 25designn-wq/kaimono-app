@@ -329,6 +329,8 @@ header > * {
   background: var(--surface);
   touch-action: pan-y;
   transition: background 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .item-list li:last-child { border-bottom: none; }
@@ -342,10 +344,11 @@ header > * {
 
 .item-name {
   flex: 1;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 300;
   line-height: 1.3;
   color: var(--text);
+  letter-spacing: 0.02em;
 }
 
 /* Category badges */
