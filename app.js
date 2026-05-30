@@ -20,7 +20,7 @@ const STORAGE_KEY      = 'kaimono_items';
 const API_KEY_STORAGE  = 'kaimono_google_api_key';
 const ACTIVE_STORE_KEY = 'kaimono_active_store';
 const RATE_LIMIT_KEY   = 'kaimono_places_rate';
-const GEMINI_MODEL     = 'gemini-1.5-flash';
+const GEMINI_MODEL     = 'gemini-2.0-flash';
 
 // 1日あたりの Places API 呼び出し上限・クールダウン
 const DAILY_LIMIT   = 30;
