@@ -9,11 +9,8 @@
 <body>
   <div id="app">
     <header>
-      <h1>🛒 買い物メモ</h1>
-      <div class="header-actions">
-        <button id="location-btn" class="icon-btn" title="現在地の店舗を検出">📍</button>
-        <button id="settings-btn" class="icon-btn" title="設定">⚙️</button>
-      </div>
+      <button id="location-btn" class="icon-btn" title="現在地の店舗を検出">📍</button>
+      <button id="settings-btn" class="icon-btn" title="設定">⚙️</button>
     </header>
 
     <div id="settings-panel" class="hidden">
@@ -37,30 +34,24 @@
     <div id="location-banner" class="hidden"></div>
 
     <form id="add-form">
-      <div class="form-row">
-        <input
-          type="text"
-          id="item-input"
-          placeholder="商品名を入力..."
-          autocomplete="off"
-          required
-        />
-        <button type="button" id="mic-btn" title="音声入力">🎤</button>
+      <button type="button" id="mic-btn" title="音声入力">🎤</button>
+      <input
+        type="text"
+        id="item-input"
+        placeholder="商品名を入力..."
+        autocomplete="off"
+        required
+      />
+      <div id="category-select-wrap" class="hidden">
+        <select id="category-select">
+          <option value="スーパー">🏪 スーパー</option>
+          <option value="薬局">💊 薬局</option>
+          <option value="ホームセンター">🔨 ホームセンター</option>
+          <option value="その他">📦 その他</option>
+        </select>
       </div>
-      <div class="form-row">
-        <div id="category-select-wrap">
-          <select id="category-select">
-            <option value="スーパー">🏪 スーパー</option>
-            <option value="薬局">💊 薬局</option>
-            <option value="ホームセンター">🔨 ホームセンター</option>
-            <option value="その他">📦 その他</option>
-          </select>
-        </div>
-        <div id="ai-indicator" class="hidden">
-          <span class="ai-badge">✨ AI自動判定</span>
-        </div>
-        <button type="submit" id="add-btn">追加</button>
-      </div>
+      <div id="ai-indicator" class="hidden"></div>
+      <button type="submit" id="add-btn">追加</button>
     </form>
 
     <div id="lists-container"></div>
