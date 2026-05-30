@@ -30,18 +30,18 @@ body {
   max-width: 390px;
   margin: 0 auto;
   padding-bottom: calc(var(--tab-height) + var(--input-bar-height) + 16px);
-  padding-top: 52px;
+  padding-top: 8px;
 }
 
 .hidden {
   display: none !important;
 }
 
-/* Top bar */
+/* Floating header icons */
 header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 16px;
+  background: none;
+  border: none;
+  padding: 12px 12px 0;
   height: 52px;
   position: fixed;
   top: 0;
@@ -51,28 +51,35 @@ header {
   max-width: 390px;
   z-index: 20;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 4px;
+  pointer-events: none;
+}
+
+header > * {
+  pointer-events: auto;
 }
 
 .icon-btn {
-  background: none;
+  background: rgba(255,255,255,0.85);
   border: none;
-  width: 40px;
-  height: 40px;
-  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
   color: var(--text-secondary);
-  border-radius: 0;
-  transition: color 0.15s;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
-.icon-btn:active { color: var(--text); }
+.icon-btn:active { color: var(--text); background: rgba(255,255,255,1); }
 .icon-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* Settings Panel */
