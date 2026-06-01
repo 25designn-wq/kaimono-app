@@ -16,7 +16,6 @@ const itemsRef = db.collection('items');
 
 // --- Constants ---
 
-const STORAGE_KEY         = 'kaimono_items';
 const API_KEY_STORAGE     = 'kaimono_google_api_key';
 const PLACES_KEY_STORAGE  = 'kaimono_places_api_key';
 const ACTIVE_STORE_KEY    = 'kaimono_active_store';
@@ -169,47 +168,45 @@ JSON配列のみを返してください（他の文字は不要）。
 
 // --- Google Places API: 近くの店舗を検出 ---
 
-async function detectLocation() {
-  const btn = document.getElementById('location-btn');
-  btn.textContent = '⏳';
-  btn.disabled = true;
-
+// silent=true（自動検出）の場合はエラーバナーを出さない
+async function detectLocation(silent = false) {
+  const fail = msg => { if (!silent) showLocationError(msg); };
   try {
     const pos = await new Promise((resolve, reject) =>
       navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
     );
     const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-    if (accuracy > 50) {
-      showLocationError(`GPS精度が低すぎます（誤差${Math.round(accuracy)}m）`);
+    if (accuracy > 100) {
+      fail(`GPS精度が低すぎます（誤差${Math.round(accuracy)}m）`);
       return;
     }
-    const store = await queryNearestStore(lat, lng);
+    const store = await queryNearestStore(lat, lng, silent);
 
     if (store) {
       setActiveStore(store);
     } else {
-      showLocationError('近くに対応店舗が見つかりませんでした');
+      // 位置は取れたが対応店舗なし → 古い「付近にいます」表示を解除
+      if (activeStore) clearActiveStore();
+      fail('近くに対応店舗が見つかりませんでした');
     }
   } catch (err) {
     const msg = err.code === 1
       ? '位置情報の許可が必要です'
       : '位置情報の取得に失敗しました';
-    showLocationError(msg);
-  } finally {
-    btn.textContent = '📍';
-    btn.disabled = false;
+    fail(msg);
   }
 }
 
-async function queryNearestStore(lat, lng) {
+async function queryNearestStore(lat, lng, silent = false) {
+  const fail = msg => { if (!silent) showLocationError(msg); };
   const key = getPlacesKey();
   if (!key) {
-    showLocationError('Places APIキーを設定してください');
+    fail('Places APIキーを設定してください');
     return null;
   }
 
   if (!checkRateLimit()) {
-    showLocationError('しばらく待ってから再試行してください');
+    fail('しばらく待ってから再試行してください');
     return null;
   }
 
@@ -510,8 +507,6 @@ document.getElementById('save-places-key-btn').addEventListener('click', () => {
   setTimeout(() => { btn.textContent = '保存'; }, 2000);
 });
 
-document.getElementById('location-btn')?.addEventListener('click', detectLocation);
-
 // --- 音声入力 ---
 const micBtn = document.getElementById('mic-btn');
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -587,7 +582,7 @@ if ('serviceWorker' in navigator) {
 
 // --- 位置情報の自動検出 ---
 function autoDetectLocation() {
-  if (navigator.geolocation) detectLocation();
+  if (navigator.geolocation) detectLocation(true);
 }
 
 // アプリ起動時
