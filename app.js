@@ -372,12 +372,12 @@ function frame() {
     const { x, y } = body.position;
     const text = item.name;
     const FONT = px => `600 ${px}px -apple-system, "Hiragino Sans", sans-serif`;
-    const maxW = r * 1.68;
+    const maxW = r * 1.55;
 
-    // フォント：最低8文字が必ず収まるサイズに調整
-    let fontSize = Math.min(r * 0.40, 26);
+    // フォント：最低5文字が必ず収まるサイズに調整（超えたらスクロール）
+    let fontSize = Math.min(r * 0.42, 26);
     tctx.font = FONT(fontSize);
-    const probe  = text.slice(0, 8) || text;
+    const probe  = text.slice(0, 5) || text;
     const probeW = tctx.measureText(probe).width;
     if (probeW > maxW) fontSize *= maxW / probeW;
     fontSize = Math.max(fontSize, 11);
