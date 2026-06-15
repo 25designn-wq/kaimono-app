@@ -15,9 +15,9 @@ const TS        = firebase.firestore.FieldValue.serverTimestamp;
 
 // ===== 緊急度 =====
 const URGENCY = {
-  anytime: { factor: 1.0, color: [92, 156, 200],  text: '#ffffff' }, // 青
-  soon:    { factor: 1.3, color: [224, 168, 64],   text: '#2a2410' }, // 黄
-  hurry:   { factor: 1.6, color: [214, 78, 64],    text: '#ffffff' }, // 赤
+  anytime: { sizeMult: 0.8,  color: [92, 156, 200],  text: '#ffffff' }, // 青
+  soon:    { sizeMult: 1.0,  color: [224, 168, 64],   text: '#2a2410' }, // 黄
+  hurry:   { sizeMult: 1.28, color: [214, 78, 64],    text: '#ffffff' }, // 赤
 };
 const urgencyOf = item => (URGENCY[item.urgency] ? item.urgency : 'anytime');
 
@@ -26,17 +26,15 @@ const FILL  = 0.52;   // 画面に対する泡の総面積の割合
 const R_MIN = 44;     // 最小半径（5文字が収まる下限）
 const R_MAX = 120;    // 最大半径
 
-// 緊急度で重み付けしつつ、総面積が画面の FILL 割合になるよう各半径を決める
+// 数で「基本サイズ」を決めて画面を埋め、緊急度の倍率を必ず掛ける
 function recomputeSizes() {
   const arr = [...bubbles.values()];
   if (!arr.length) return;
-  let sumW = 0;
-  for (const b of arr) sumW += URGENCY[urgencyOf(b.item)].factor;
-  const fillArea = FILL * stageW * stageH;
+  // n個の等しい円で画面の FILL 割合を埋めるときの半径
+  let base = Math.sqrt((FILL * stageW * stageH / arr.length) / Math.PI);
+  base = Math.max(R_MIN, Math.min(R_MAX, base));
   for (const b of arr) {
-    const w = URGENCY[urgencyOf(b.item)].factor;
-    let r = Math.sqrt((fillArea * w / sumW) / Math.PI);
-    r = Math.max(R_MIN, Math.min(R_MAX, r));
+    const r = base * URGENCY[urgencyOf(b.item)].sizeMult;  // 緊急度で必ず差がつく
     const old = b.body.plugin.r;
     if (Math.abs(r - old) > 0.5) {
       Body.scale(b.body, r / old, r / old);
@@ -90,6 +88,7 @@ const MAX_B = 48;
 const foamUniforms = {
   uTime:    { value: 0 },
   uRes:     { value: new THREE.Vector2(1, 1) },
+  uTextTex: { value: null },
   uCount:   { value: 0 },
   uBubbles: { value: Array.from({ length: MAX_B }, () => new THREE.Vector4(0, 0, 0, 0)) }, // x,y,r,colorIdx（device px・y上向き）
   uColors:  { value: [
@@ -104,6 +103,7 @@ const FOAM_FRAG = `
   #define MAX_B ${MAX_B}
   uniform float uTime;
   uniform vec2  uRes;
+  uniform sampler2D uTextTex;
   uniform int   uCount;
   uniform vec4  uBubbles[MAX_B];   // x,y,r,colorIdx（device px・y上向き）
   uniform vec3  uColors[3];
@@ -172,6 +172,11 @@ const FOAM_FRAG = `
     col += vec3(1.0) * spec;            // 鋭いハイライト
     col += vec3(1.0) * sheen;           // ぬめっとしたつや
 
+    // ★文字も同じ屈折で歪ませて泡の中に埋め込む
+    vec2 tuv = vec2(ruv.x + off.x, 1.0 - ruv.y - off.y);
+    vec4 tx = texture2D(uTextTex, tuv);
+    col = mix(col, tx.rgb, tx.a * 0.92);
+
     // プラトー境界（膜の線）：暗いふち＋内側に明るい張り
     float border = 1.0 - smoothstep(0.0, bestR*bestR*0.16, edge);
     col = mix(col, col*0.6, border*0.5);
@@ -193,11 +198,20 @@ const foamMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), foamMat);
 foamMesh.frustumCulled = false;
 scene.add(foamMesh);
 
-// ===== 文字・粒子の2Dオーバーレイ =====
+// ===== 粒子の2Dオーバーレイ（最前面）=====
 const overlay = document.createElement('canvas');
 overlay.id = 'overlay';
 stage.appendChild(overlay);
 const octx = overlay.getContext('2d');
+
+// ===== 文字テクスチャ（WebGLで屈折させるためのオフスクリーン）=====
+const textCanvas = document.createElement('canvas');
+const tctx = textCanvas.getContext('2d');
+const textTexture = new THREE.CanvasTexture(textCanvas);
+textTexture.flipY = false;
+textTexture.minFilter = THREE.LinearFilter;
+textTexture.magFilter = THREE.LinearFilter;
+foamUniforms.uTextTex.value = textTexture;
 
 function resizeStage() {
   stageW = stage.clientWidth;
@@ -213,6 +227,10 @@ function resizeStage() {
   overlay.style.width = stageW + 'px';
   overlay.style.height = stageH + 'px';
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  textCanvas.width  = stageW * dpr;
+  textCanvas.height = stageH * dpr;
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   buildWalls();
   recomputeSizes();
@@ -330,10 +348,9 @@ function frame() {
   }
   foamUniforms.uCount.value = bi;
   foamUniforms.uTime.value = now / 1000;
-  renderer.render(scene, camera);
 
-  // 2D：文字・粒子
-  octx.clearRect(0, 0, stageW, stageH);
+  // 文字を屈折用テクスチャへ描く（renderの前）
+  tctx.clearRect(0, 0, stageW, stageH);
   for (const { body, item } of bubbles.values()) {
     const r = body.plugin.r;
     const u = URGENCY[urgencyOf(item)];
@@ -344,39 +361,37 @@ function frame() {
 
     // フォント：最低5文字が必ず収まるサイズに調整
     let fontSize = Math.min(r * 0.42, 26);
-    octx.font = FONT(fontSize);
+    tctx.font = FONT(fontSize);
     const probe  = text.slice(0, 5) || text;
-    const probeW = octx.measureText(probe).width;
+    const probeW = tctx.measureText(probe).width;
     if (probeW > maxW) fontSize *= maxW / probeW;
     fontSize = Math.max(fontSize, 11);
-    octx.font = FONT(fontSize);
+    tctx.font = FONT(fontSize);
 
-    const fullW = octx.measureText(text).width;
+    const fullW = tctx.measureText(text).width;
     const curv  = 0.42 / r; // 泡に沿った湾曲
 
-    octx.save();
-    octx.beginPath();
-    octx.arc(x, y, r * 0.9, 0, Math.PI * 2);
-    octx.clip();
-    octx.fillStyle = u.text;
-    octx.textBaseline = 'middle';
-    octx.textAlign = 'center';
-    octx.shadowColor = 'rgba(0,0,0,0.22)';
-    octx.shadowBlur = 3;
+    tctx.save();
+    tctx.beginPath();
+    tctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
+    tctx.clip();
+    tctx.fillStyle = u.text;
+    tctx.textBaseline = 'middle';
+    tctx.textAlign = 'center';
 
     const drawCurved = startX => {
       let gx = startX;
       for (const ch of text) {
-        const cw = octx.measureText(ch).width;
+        const cw = tctx.measureText(ch).width;
         const cxp = gx + cw / 2;
         const dx = cxp - x;
         const yy = y + curv * dx * dx;            // 湾曲（下に弧）
         const rot = Math.atan(2 * curv * dx);     // 接線方向に回転
-        octx.save();
-        octx.translate(cxp, yy);
-        octx.rotate(rot);
-        octx.fillText(ch, 0, 0);
-        octx.restore();
+        tctx.save();
+        tctx.translate(cxp, yy);
+        tctx.rotate(rot);
+        tctx.fillText(ch, 0, 0);
+        tctx.restore();
         gx += cw;
       }
     };
@@ -389,8 +404,14 @@ function frame() {
       drawCurved(x - maxW / 2 - offset);
       drawCurved(x - maxW / 2 - offset + span);
     }
-    octx.restore();
+    tctx.restore();
   }
+  textTexture.needsUpdate = true;
+
+  renderer.render(scene, camera);
+
+  // 粒子（最前面）
+  octx.clearRect(0, 0, stageW, stageH);
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx; p.y += p.vy; p.vy += 0.10; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.028;
