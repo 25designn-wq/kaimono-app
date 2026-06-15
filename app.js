@@ -89,6 +89,7 @@ const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const MAX_B = 48;
 const foamUniforms = {
   uTime:    { value: 0 },
+  uRes:     { value: new THREE.Vector2(1, 1) },
   uCount:   { value: 0 },
   uBubbles: { value: Array.from({ length: MAX_B }, () => new THREE.Vector4(0, 0, 0, 0)) }, // x,y,r,colorIdx（device px・y上向き）
   uColors:  { value: [
@@ -102,11 +103,20 @@ const FOAM_FRAG = `
   precision highp float;
   #define MAX_B ${MAX_B}
   uniform float uTime;
+  uniform vec2  uRes;
   uniform int   uCount;
   uniform vec4  uBubbles[MAX_B];   // x,y,r,colorIdx（device px・y上向き）
   uniform vec3  uColors[3];
 
   vec3 irid(float t){ return 0.5 + 0.5*cos(6.28318*(t + vec3(0.0,0.33,0.67))); }
+
+  // 屈折で覗く背景（手続き的・ソフトな光点入り）
+  vec3 environment(vec2 uv){
+    vec3 c = mix(vec3(0.88,0.91,0.96), vec3(0.72,0.78,0.90), clamp(uv.y, 0.0, 1.0));
+    c += vec3(0.45) * smoothstep(0.30, 0.0, distance(uv, vec2(0.26, 0.78)));
+    c += vec3(0.28) * smoothstep(0.34, 0.0, distance(uv, vec2(0.80, 0.40)));
+    return c;
+  }
 
   void main(){
     vec2 p = gl_FragCoord.xy;
@@ -143,22 +153,32 @@ const FOAM_FRAG = `
     if (bestIdx == 1) base = uColors[1];
     else if (bestIdx == 2) base = uColors[2];
 
-    vec3 iri = irid(n.x*0.30 + n.y*0.22 + uTime*0.03);
-    vec3 L = normalize(vec3(-0.4, 0.6, 0.85));
-    float spec = pow(max(dot(reflect(-L, n), vec3(0.0,0.0,1.0)), 0.0), 42.0);
+    // ★屈折：法線で背景をずらして覗く（縁ほど強い）＋色収差
+    vec2 ruv = gl_FragCoord.xy / uRes;
+    vec2 off = n.xy * (0.10 * f + 0.02);
+    float ca = 0.010 * (f + 0.2);
+    vec3 refr;
+    refr.r = environment(ruv + off + n.xy * ca).r;
+    refr.g = environment(ruv + off).g;
+    refr.b = environment(ruv + off - n.xy * ca).b;
 
-    vec3 col = base;
-    col = mix(col, col*1.25, f*0.5);
-    col += iri * f * 0.5;
-    col += vec3(1.0) * spec;
+    vec3 iri = irid(n.x*0.30 + n.y*0.22 + uTime*0.04);
+    vec3 L = normalize(vec3(-0.45, 0.55, 0.8));
+    float spec  = pow(max(reflect(-L, n).z, 0.0), 80.0);  // 鋭い光沢
+    float sheen = pow(1.0 - ndv, 1.5) * 0.22;             // 濡れた広いつや
+
+    vec3 col = mix(refr, base, 0.42);   // 屈折した背景＋緊急色
+    col += iri * f * 0.5;               // 縁の虹色
+    col += vec3(1.0) * spec;            // 鋭いハイライト
+    col += vec3(1.0) * sheen;           // ぬめっとしたつや
 
     // プラトー境界（膜の線）：暗いふち＋内側に明るい張り
     float border = 1.0 - smoothstep(0.0, bestR*bestR*0.16, edge);
-    col = mix(col, col*0.6, border*0.55);                 // 境界を暗く
+    col = mix(col, col*0.6, border*0.5);
     float rib = smoothstep(0.0, bestR*bestR*0.05, edge) - smoothstep(bestR*bestR*0.05, bestR*bestR*0.18, edge);
-    col += vec3(0.25) * rib;                              // 膜のすぐ内側を明るく
+    col += vec3(0.25) * rib;
 
-    float alpha = (0.6 + f*0.38 + spec) * cover;
+    float alpha = (0.62 + f*0.4 + spec) * cover;
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
 `;
@@ -186,6 +206,7 @@ function resizeStage() {
 
   renderer.setPixelRatio(dpr);
   renderer.setSize(stageW, stageH);
+  foamUniforms.uRes.value.set(glCanvas.width, glCanvas.height);
 
   overlay.width = stageW * dpr;
   overlay.height = stageH * dpr;
