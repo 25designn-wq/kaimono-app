@@ -159,14 +159,16 @@ const FOAM_FRAG = `
     if (bestIdx == 1) base = uColors[1];
     else if (bestIdx == 2) base = uColors[2];
 
-    // ★屈折：法線で背景をずらして覗く（縁ほど強い）＋色収差
-    vec2 ruv = gl_FragCoord.xy / uRes;
-    vec2 off = n.xy * (0.10 * f + 0.02);
-    float ca = 0.010 * (f + 0.2);
+    // ★凸レンズ：中心も含め全体を少し拡大＋縁ほど強い屈折
+    float rho = clamp(len / bestR, 0.0, 1.0);
+    vec2 dir = (len > 0.001) ? (o / len) : vec2(0.0);
+    vec2 lensP = bestC + o * (0.82 - 0.18 * rho * rho) + n.xy * (bestR * 0.10 * f);
+    vec2 luv = lensP / uRes;
+    float ca = 0.008 + 0.02 * f;
     vec3 refr;
-    refr.r = environment(ruv + off + n.xy * ca).r;
-    refr.g = environment(ruv + off).g;
-    refr.b = environment(ruv + off - n.xy * ca).b;
+    refr.r = environment(luv + dir * ca).r;
+    refr.g = environment(luv).g;
+    refr.b = environment(luv - dir * ca).b;
 
     vec3 iri = irid(n.x*0.30 + n.y*0.22 + uTime*0.04);
     vec3 L = normalize(vec3(-0.45, 0.55, 0.8));
@@ -178,15 +180,11 @@ const FOAM_FRAG = `
     col += vec3(1.0) * spec;            // 鋭いハイライト
     col += vec3(1.0) * sheen;           // ぬめっとしたつや
 
-    // ★文字を泡レンズで歪ませる：中心ほど拡大・縁ほど強く引き込む＋色収差
-    float rho = clamp(len / bestR, 0.0, 1.0);
-    vec2 dir = (len > 0.001) ? (o / len) : vec2(0.0);
-    vec2 sampleP = bestC + o * (0.84 - 0.22 * rho * rho)  // レンズ拡大（縁ほど圧縮）
-                 + n.xy * (bestR * 0.12 * f);             // 縁の屈折ずれ
+    // ★文字も同じ凸レンズ位置でサンプル＝中央もふくらむ＋色収差
     float caT = bestR * 0.016 * (f + 0.1);
-    vec2 tuvG = vec2(sampleP.x / uRes.x, 1.0 - sampleP.y / uRes.y);
-    vec2 tuvR = vec2((sampleP.x + dir.x*caT) / uRes.x, 1.0 - (sampleP.y + dir.y*caT) / uRes.y);
-    vec2 tuvB = vec2((sampleP.x - dir.x*caT) / uRes.x, 1.0 - (sampleP.y - dir.y*caT) / uRes.y);
+    vec2 tuvG = vec2(lensP.x / uRes.x, 1.0 - lensP.y / uRes.y);
+    vec2 tuvR = vec2((lensP.x + dir.x*caT) / uRes.x, 1.0 - (lensP.y + dir.y*caT) / uRes.y);
+    vec2 tuvB = vec2((lensP.x - dir.x*caT) / uRes.x, 1.0 - (lensP.y - dir.y*caT) / uRes.y);
     float tr = texture2D(uTextTex, tuvR).r;
     vec4  tg = texture2D(uTextTex, tuvG);
     float tb = texture2D(uTextTex, tuvB).b;
@@ -301,8 +299,8 @@ Events.on(engine, 'beforeUpdate', () => {
     const cx = (stageW / 2 - body.position.x) * 0.0000020;
     const cy = (stageH / 2 - body.position.y) * 0.0000020;
     Body.applyForce(body, body.position, {
-      x: (wanderX + cx + tiltX * 0.00040) * m,
-      y: (wanderY + cy + tiltY * 0.00040) * m,
+      x: (wanderX + cx + tiltX * 0.0016) * m,
+      y: (wanderY + cy + tiltY * 0.0016) * m,
     });
   }
 
