@@ -162,7 +162,7 @@ const FOAM_FRAG = `
     // ★凸レンズ：中心も含め全体を少し拡大＋縁ほど強い屈折
     float rho = clamp(len / bestR, 0.0, 1.0);
     vec2 dir = (len > 0.001) ? (o / len) : vec2(0.0);
-    vec2 lensP = bestC + o * (0.82 - 0.18 * rho * rho) + n.xy * (bestR * 0.10 * f);
+    vec2 lensP = bestC + o * (0.72 - 0.26 * rho * rho) + n.xy * (bestR * 0.15 * f);
     vec2 luv = lensP / uRes;
     float ca = 0.008 + 0.02 * f;
     vec3 refr;
@@ -372,12 +372,12 @@ function frame() {
     const { x, y } = body.position;
     const text = item.name;
     const FONT = px => `600 ${px}px -apple-system, "Hiragino Sans", sans-serif`;
-    const maxW = r * 1.55;
+    const maxW = r * 1.68;
 
-    // フォント：最低5文字が必ず収まるサイズに調整
-    let fontSize = Math.min(r * 0.42, 26);
+    // フォント：最低8文字が必ず収まるサイズに調整
+    let fontSize = Math.min(r * 0.40, 26);
     tctx.font = FONT(fontSize);
-    const probe  = text.slice(0, 5) || text;
+    const probe  = text.slice(0, 8) || text;
     const probeW = tctx.measureText(probe).width;
     if (probeW > maxW) fontSize *= maxW / probeW;
     fontSize = Math.max(fontSize, 11);
