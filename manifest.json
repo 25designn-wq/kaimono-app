@@ -1,11 +1,11 @@
 {
-  "name": "買い物メモ",
-  "short_name": "買い物メモ",
-  "description": "夫婦で使う買い物メモアプリ",
+  "name": "買い物バブル",
+  "short_name": "買い物バブル",
+  "description": "夫婦で使う買い物バブルメモ",
   "start_url": "/kaimono-app/",
   "display": "standalone",
-  "background_color": "#f2efe9",
-  "theme_color": "#2d2d2d",
+  "background_color": "#161922",
+  "theme_color": "#1a1d24",
   "icons": [
     {
       "src": "icon-192.png",

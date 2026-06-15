@@ -2,103 +2,65 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>買い物メモ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>買い物バブル</title>
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#2d2d2d" />
+  <meta name="theme-color" content="#1a1d24" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="買い物メモ" />
+  <meta name="apple-mobile-web-app-title" content="買い物バブル" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
-    <header>
-      <button id="settings-btn" class="icon-btn" title="設定">⚙️</button>
-    </header>
+    <!-- 物理バブルの描画領域 -->
+    <div id="bubble-stage"></div>
 
-    <div id="settings-panel" class="hidden">
-      <div class="settings-body">
-        <p class="settings-label">Gemini APIキー（カテゴリ自動判定）</p>
-        <div class="api-key-row">
-          <input type="password" id="api-key-input" placeholder="AQ...." />
-          <button id="save-key-btn">保存</button>
-        </div>
-        <p class="settings-label">Places APIキー（近くの店舗検索）</p>
-        <div class="api-key-row">
-          <input type="password" id="places-key-input" placeholder="AIzaSy..." />
-          <button id="save-places-key-btn">保存</button>
-        </div>
-        <a class="settings-link" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">
-          Google Cloud Console でキーを作成 →
-        </a>
+    <!-- 空のときの案内 -->
+    <div id="empty-hint" class="hidden">
+      <p>まだ何もないよ</p>
+      <p class="sub">下から追加してね</p>
+    </div>
+
+    <!-- 最近買ったもの ボタン -->
+    <button id="recent-btn" title="最近買ったもの">🛍</button>
+
+    <!-- 緊急度ポップオーバー（＋押下後に出る）-->
+    <div id="urgency-pop" class="hidden">
+      <p class="pop-name" id="pop-name"></p>
+      <div class="pop-row">
+        <button type="button" class="urgency-opt" data-urgency="anytime">いつか</button>
+        <button type="button" class="urgency-opt" data-urgency="soon">そろそろ</button>
+        <button type="button" class="urgency-opt" data-urgency="hurry">いそぎ</button>
       </div>
     </div>
 
-    <div id="location-banner" class="hidden"></div>
-
+    <!-- 入力バー -->
     <form id="add-form">
-      <button type="button" id="mic-btn" title="音声入力">🎤</button>
       <input
         type="text"
         id="item-input"
-        placeholder="商品名を入力..."
+        placeholder="ほしいもの…"
         autocomplete="off"
         required
       />
-      <div id="category-select-wrap" class="hidden">
-        <select id="category-select">
-          <option value="スーパー">🏪 スーパー</option>
-          <option value="薬局">💊 薬局</option>
-          <option value="ホームセンター">🔨 ホームセンター</option>
-          <option value="その他">📦 その他</option>
-        </select>
-      </div>
-      <div id="ai-indicator" class="hidden"></div>
-      <button type="submit" id="add-btn">追加</button>
+      <button type="submit" id="add-btn">＋</button>
     </form>
-
-    <div id="lists-container"></div>
   </div>
 
-  <!-- Bottom Tab Bar -->
-  <nav id="bottom-tabs">
-    <button class="tab-btn active" data-tab="全部">
-      <span class="tab-icon">🛒</span>
-      <span class="tab-label">全部</span>
-    </button>
-    <button class="tab-btn" data-tab="スーパー">
-      <span class="tab-icon">🏪</span>
-      <span class="tab-label">スーパー</span>
-    </button>
-    <button class="tab-btn" data-tab="薬局">
-      <span class="tab-icon">💊</span>
-      <span class="tab-label">薬局</span>
-    </button>
-    <button class="tab-btn" data-tab="ホームセンター">
-      <span class="tab-icon">🔨</span>
-      <span class="tab-label">DIY</span>
-    </button>
-    <button class="tab-btn" data-tab="その他">
-      <span class="tab-icon">📦</span>
-      <span class="tab-label">その他</span>
-    </button>
-  </nav>
-
-  <!-- Tag Edit Modal -->
-  <div id="edit-modal" class="hidden">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-      <h3 id="edit-modal-title"></h3>
-      <div id="edit-tag-list"></div>
-      <div class="modal-actions">
-        <button id="edit-cancel-btn">キャンセル</button>
-        <button id="edit-save-btn">保存</button>
-      </div>
+  <!-- 最近買ったもの パネル -->
+  <div id="recent-panel" class="hidden">
+    <div class="panel-overlay"></div>
+    <div class="panel-content">
+      <h3>最近買ったもの</h3>
+      <ul id="recent-list"></ul>
+      <button id="recent-close">閉じる</button>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>

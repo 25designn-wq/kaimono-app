@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kaimono-v2';
+const CACHE_NAME = 'kaimono-v3';
 const CACHE_URLS = [
   '/kaimono-app/',
   '/kaimono-app/index.html',
