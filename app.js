@@ -261,7 +261,7 @@ function makeBubble(item) {
   const y = 40 + Math.random() * Math.max(stageH - 80, 1);
 
   const body = Bodies.circle(x, y, r, {
-    restitution: 0.18, friction: 0, frictionAir: 0.075, density: 0.0011, slop: 0.8,
+    restitution: 0.18, friction: 0, frictionAir: 0.06, density: 0.0011, slop: 0.8,
   });
   body.plugin = { id: item.id, item, r, wobble: 0, phase: Math.random() * Math.PI * 2 };
   Body.setVelocity(body, { x: (Math.random() - 0.5) * 0.8, y: (Math.random() - 0.5) * 0.8 });
@@ -299,8 +299,8 @@ Events.on(engine, 'beforeUpdate', () => {
     const cx = (stageW / 2 - body.position.x) * 0.0000020;
     const cy = (stageH / 2 - body.position.y) * 0.0000020;
     Body.applyForce(body, body.position, {
-      x: (wanderX + cx + tiltX * 0.0016) * m,
-      y: (wanderY + cy + tiltY * 0.0016) * m,
+      x: (wanderX + cx + tiltX * 0.0024) * m,
+      y: (wanderY + cy + tiltY * 0.0024) * m,
     });
   }
 
@@ -320,7 +320,7 @@ Events.on(engine, 'beforeUpdate', () => {
   }
 
   for (const body of list) {
-    const sp = Math.hypot(body.velocity.x, body.velocity.y), cap = 1.1;
+    const sp = Math.hypot(body.velocity.x, body.velocity.y), cap = 1.5;
     if (sp > cap) Body.setVelocity(body, { x: body.velocity.x / sp * cap, y: body.velocity.y / sp * cap });
     body.plugin.wobble *= 0.90;
   }
