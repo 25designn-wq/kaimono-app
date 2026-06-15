@@ -21,20 +21,26 @@ const URGENCY = {
 };
 const urgencyOf = item => (URGENCY[item.urgency] ? item.urgency : 'anytime');
 
-// ===== サイズ（リストの数で画面を埋める）=====
-const FILL  = 0.52;   // 画面に対する泡の総面積の割合
-const R_MIN = 44;     // 最小半径（5文字が収まる下限）
-const R_MAX = 120;    // 最大半径
+// ===== サイズ（数で画面を埋める × 緊急度 × 放置日数）=====
+const FILL        = 0.52;  // 画面に対する泡の総面積の割合
+const R_MIN       = 44;    // 基本半径の下限
+const R_MAX       = 120;   // 基本半径の上限
+const GROWTH_DAYS = 5;     // この日数で成長しきる
+const AGE_EXTRA   = 0.6;   // 放置で最大 +60%（古いほど大きい）
 
-// 数で「基本サイズ」を決めて画面を埋め、緊急度の倍率を必ず掛ける
+// 大きさ ＝ 基本サイズ（数で決まる）× 緊急度 × 放置日数
 function recomputeSizes() {
   const arr = [...bubbles.values()];
   if (!arr.length) return;
-  // n個の等しい円で画面の FILL 割合を埋めるときの半径
   let base = Math.sqrt((FILL * stageW * stageH / arr.length) / Math.PI);
   base = Math.max(R_MIN, Math.min(R_MAX, base));
+  const now = Date.now();
   for (const b of arr) {
-    const r = base * URGENCY[urgencyOf(b.item)].sizeMult;  // 緊急度で必ず差がつく
+    const created = b.item.createdAt?.toMillis ? b.item.createdAt.toMillis() : now;
+    const ageDays = Math.max(0, (now - created) / 86400000);
+    const ageMult = 1 + Math.min(ageDays / GROWTH_DAYS, 1) * AGE_EXTRA;
+    let r = base * URGENCY[urgencyOf(b.item)].sizeMult * ageMult;
+    r = Math.max(28, Math.min(210, r));   // 最終クランプ
     const old = b.body.plugin.r;
     if (Math.abs(r - old) > 0.5) {
       Body.scale(b.body, r / old, r / old);
@@ -172,10 +178,21 @@ const FOAM_FRAG = `
     col += vec3(1.0) * spec;            // 鋭いハイライト
     col += vec3(1.0) * sheen;           // ぬめっとしたつや
 
-    // ★文字も同じ屈折で歪ませて泡の中に埋め込む
-    vec2 tuv = vec2(ruv.x + off.x, 1.0 - ruv.y - off.y);
-    vec4 tx = texture2D(uTextTex, tuv);
-    col = mix(col, tx.rgb, tx.a * 0.92);
+    // ★文字を泡レンズで歪ませる：中心ほど拡大・縁ほど強く引き込む＋色収差
+    float rho = clamp(len / bestR, 0.0, 1.0);
+    vec2 dir = (len > 0.001) ? (o / len) : vec2(0.0);
+    vec2 sampleP = bestC + o * (0.84 - 0.22 * rho * rho)  // レンズ拡大（縁ほど圧縮）
+                 + n.xy * (bestR * 0.12 * f);             // 縁の屈折ずれ
+    float caT = bestR * 0.016 * (f + 0.1);
+    vec2 tuvG = vec2(sampleP.x / uRes.x, 1.0 - sampleP.y / uRes.y);
+    vec2 tuvR = vec2((sampleP.x + dir.x*caT) / uRes.x, 1.0 - (sampleP.y + dir.y*caT) / uRes.y);
+    vec2 tuvB = vec2((sampleP.x - dir.x*caT) / uRes.x, 1.0 - (sampleP.y - dir.y*caT) / uRes.y);
+    float tr = texture2D(uTextTex, tuvR).r;
+    vec4  tg = texture2D(uTextTex, tuvG);
+    float tb = texture2D(uTextTex, tuvB).b;
+    float ta = max(tg.a, max(texture2D(uTextTex, tuvR).a, texture2D(uTextTex, tuvB).a));
+    vec3 txc = vec3(tr, tg.g, tb);
+    col = mix(col, txc, ta * 0.92);
 
     // プラトー境界（膜の線）：暗いふち＋内側に明るい張り
     float border = 1.0 - smoothstep(0.0, bestR*bestR*0.16, edge);
