@@ -372,19 +372,20 @@ function frame() {
     const { x, y } = body.position;
     const text = item.name;
     const FONT = px => `600 ${px}px -apple-system, "Hiragino Sans", sans-serif`;
-    const maxW = r * 1.55;
+    const fitW    = r * 1.25;  // 収まるとき：縁から余白をとる
+    const scrollW = r * 1.70;  // スクロール時：余白なしで流す
 
-    // フォント：最低5文字が必ず収まるサイズに調整（超えたらスクロール）
+    // フォント：5文字が「余白付きの幅」に収まるサイズに（超えたらスクロール）
     let fontSize = Math.min(r * 0.42, 26);
     tctx.font = FONT(fontSize);
     const probe  = text.slice(0, 5) || text;
     const probeW = tctx.measureText(probe).width;
-    if (probeW > maxW) fontSize *= maxW / probeW;
+    if (probeW > fitW) fontSize *= fitW / probeW;
     fontSize = Math.max(fontSize, 11);
     tctx.font = FONT(fontSize);
 
     const fullW = tctx.measureText(text).width;
-    const curv  = 0.42 / r; // 泡に沿った湾曲
+    const curv  = 0.32 / r; // 少しだけ湾曲
 
     tctx.save();
     tctx.beginPath();
@@ -411,13 +412,13 @@ function frame() {
       }
     };
 
-    if (fullW <= maxW) {
-      drawCurved(x - fullW / 2);
+    if (fullW <= fitW) {
+      drawCurved(x - fullW / 2);                 // 余白付きで中央に
     } else {
       const span = fullW + 40;
       const offset = (now / 22) % span;
-      drawCurved(x - maxW / 2 - offset);
-      drawCurved(x - maxW / 2 - offset + span);
+      drawCurved(x - scrollW / 2 - offset);      // 余白なしで流す
+      drawCurved(x - scrollW / 2 - offset + span);
     }
     tctx.restore();
   }
