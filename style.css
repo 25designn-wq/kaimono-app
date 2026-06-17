@@ -49,7 +49,6 @@ body {
 }
 #bubble-stage #gl      { z-index: 1; }
 #bubble-stage #overlay { z-index: 2; }
-#bubble-stage #deco    { z-index: 4; }
 
 /* 下部フォグ：入力バー付近で泡を視覚的に沈める */
 #bubble-stage::after {

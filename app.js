@@ -221,12 +221,6 @@ overlay.id = 'overlay';
 stage.appendChild(overlay);
 const octx = overlay.getContext('2d');
 
-// ===== 装飾バブル専用レイヤー（フォグより上・z-index 4）=====
-const decoCanvas = document.createElement('canvas');
-decoCanvas.id = 'deco';
-stage.appendChild(decoCanvas);
-const dctx = decoCanvas.getContext('2d');
-
 // ===== 文字テクスチャ（WebGLで屈折させるためのオフスクリーン）=====
 const textCanvas = document.createElement('canvas');
 const tctx = textCanvas.getContext('2d');
@@ -251,17 +245,12 @@ function resizeStage() {
   overlay.style.height = stageH + 'px';
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  decoCanvas.width = stageW * dpr;
-  decoCanvas.height = stageH * dpr;
-  decoCanvas.style.width = stageW + 'px';
-  decoCanvas.style.height = stageH + 'px';
-  dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
   textCanvas.width  = stageW * dpr;
   textCanvas.height = stageH * dpr;
   tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   buildWalls();
+  buildPhantomBubbles();
   recomputeSizes();
 }
 window.addEventListener('resize', resizeStage);
@@ -318,23 +307,28 @@ Events.on(engine, 'beforeUpdate', () => {
     });
   }
 
-  // 石鹸の泡どうしがくっつく：近いと弱い引力（揺れが大きいと離れる）
+  // 石鹸の泡どうしがくっつく（下部装飾バブルとも引き合う）
   const shaking = Math.hypot(tiltX, tiltY) > 0.6;
-  for (let i = 0; i < list.length && !shaking; i++) {
-    for (let j = i + 1; j < list.length; j++) {
-      const a = list[i], b = list[j];
+  const allBodies = [...list, ...phantomBodies];
+  for (let i = 0; i < allBodies.length && !shaking; i++) {
+    for (let j = i + 1; j < allBodies.length; j++) {
+      const a = allBodies[i], b = allBodies[j];
+      if (a.isStatic && b.isStatic) continue;
       const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
       const d = Math.hypot(dx, dy) || 0.0001;
       if (d < a.plugin.r + b.plugin.r + 30) {
         const f = 0.0000010, fx = (dx / d) * f, fy = (dy / d) * f;
-        Body.applyForce(a, a.position, { x:  fx * a.mass, y:  fy * a.mass });
-        Body.applyForce(b, b.position, { x: -fx * b.mass, y: -fy * b.mass });
+        if (!a.isStatic) Body.applyForce(a, a.position, { x:  fx * a.mass, y:  fy * a.mass });
+        if (!b.isStatic) Body.applyForce(b, b.position, { x: -fx * b.mass, y: -fy * b.mass });
       }
     }
   }
 
+  const nowPerf = performance.now();
   for (const body of list) {
-    const sp = Math.hypot(body.velocity.x, body.velocity.y), cap = 1.5;
+    const isFast = (body.plugin.fastUntil || 0) > nowPerf;
+    const cap = isFast ? 4.0 : 1.5;
+    const sp = Math.hypot(body.velocity.x, body.velocity.y);
     if (sp > cap) Body.setVelocity(body, { x: body.velocity.x / sp * cap, y: body.velocity.y / sp * cap });
     body.plugin.wobble *= 0.90;
   }
@@ -359,63 +353,20 @@ function spawnParticles(x, y, color, r) {
   }
 }
 
-// ===== 装飾バブル（下部フォグゾーンに湧く小さな泡）=====
-const decoBubbles = [];
-let lastDecoSpawn = 0;
-
-function drawDecoBubble(cx, cy, r, alpha) {
-  const g = dctx.createRadialGradient(cx - r*0.3, cy - r*0.35, r*0.05, cx, cy, r);
-  g.addColorStop(0,    `rgba(255,255,255,${alpha * 0.60})`);
-  g.addColorStop(0.45, `rgba(210,225,245,${alpha * 0.22})`);
-  g.addColorStop(1,    `rgba(180,200,230,${alpha * 0.06})`);
-  dctx.beginPath();
-  dctx.arc(cx, cy, r, 0, Math.PI * 2);
-  dctx.fillStyle = g;
-  dctx.fill();
-  dctx.strokeStyle = `rgba(255,255,255,${alpha * 0.50})`;
-  dctx.lineWidth = Math.max(0.5, r * 0.08);
-  dctx.stroke();
-  const sr = r * 0.22;
-  const sh = dctx.createRadialGradient(cx - r*0.28, cy - r*0.30, 0, cx - r*0.28, cy - r*0.30, sr);
-  sh.addColorStop(0, `rgba(255,255,255,${alpha * 0.80})`);
-  sh.addColorStop(1, 'rgba(255,255,255,0)');
-  dctx.beginPath();
-  dctx.arc(cx - r*0.28, cy - r*0.30, sr, 0, Math.PI * 2);
-  dctx.fillStyle = sh;
-  dctx.fill();
-}
-
-function updateDecoBubbles(now) {
-  if (now - lastDecoSpawn > 380 && decoBubbles.length < 20) {
-    const r = 3 + Math.random() * 9;
-    decoBubbles.push({
-      x: r + Math.random() * (stageW - r * 2),
-      y: stageH - r * 0.5,
-      r,
-      vx: (Math.random() - 0.5) * 0.22,
-      vy: -(0.28 + Math.random() * 0.42),
-      phase: Math.random() * Math.PI * 2,
-      alpha: 0,
-      maxAlpha: 0.50 + Math.random() * 0.30,
-    });
-    lastDecoSpawn = now;
+// ===== 下部の装飾バブル（同じGLシェーダー・物理あり・入力バーの後ろから覗く）=====
+const phantomBodies = [];
+function buildPhantomBubbles() {
+  if (phantomBodies.length) { World.remove(engine.world, phantomBodies); phantomBodies.length = 0; }
+  const count = Math.max(3, Math.round(stageW / 120));
+  for (let i = 0; i < count; i++) {
+    const r = 55 + Math.random() * 30;
+    const x = (stageW / count) * (i + 0.5) + (Math.random() - 0.5) * 20;
+    const y = stageH - BAR_ZONE / 2;
+    const body = Bodies.circle(x, y, r, { isStatic: true, restitution: 0.18, friction: 0, slop: 0.8 });
+    body.plugin = { id: `phantom_${i}`, item: null, r, wobble: 0, phase: Math.random() * Math.PI * 2, baseX: x, baseY: y };
+    phantomBodies.push(body);
   }
-  const ceiling = stageH - BAR_ZONE;
-  for (let i = decoBubbles.length - 1; i >= 0; i--) {
-    const db = decoBubbles[i];
-    db.y += db.vy;
-    db.x += db.vx + Math.sin(now / 1400 + db.phase) * 0.16;
-    const distToCeil = db.y - ceiling;
-    if (distToCeil > db.r * 4) {
-      db.alpha = Math.min(db.alpha + 0.018, db.maxAlpha);
-    } else {
-      db.alpha = Math.max(0, db.alpha - 0.025);
-    }
-    if ((db.alpha <= 0 && distToCeil < db.r) || db.x < -db.r*2 || db.x > stageW + db.r*2) {
-      decoBubbles.splice(i, 1); continue;
-    }
-    drawDecoBubble(db.x, db.y, db.r, db.alpha);
-  }
+  World.add(engine.world, phantomBodies);
 }
 
 // ===== 描画ループ =====
@@ -432,6 +383,25 @@ function frame() {
       (stageH - body.position.y) * dpr,
       body.plugin.r * 1.2 * dpr * wf, // wobble で微振動
       urgencyIndex(item)
+    );
+    bi++;
+  }
+  // 下部装飾バブル：蠢きアニメーション＋同じシェーダーで描画
+  const t_sec = now / 1000;
+  for (const body of phantomBodies) {
+    if (bi >= MAX_B) break;
+    const p = body.plugin;
+    Body.setPosition(body, {
+      x: p.baseX + Math.sin(t_sec * 0.75 + p.phase) * 11,
+      y: p.baseY + Math.cos(t_sec * 0.55 + p.phase * 1.4) * 5,
+    });
+    p.wobble = 0.10 + Math.abs(Math.sin(t_sec * 0.9 + p.phase)) * 0.18;
+    const wf = 1 + p.wobble * 0.22 * Math.sin(t_sec * 15 + p.phase);
+    foamUniforms.uBubbles.value[bi].set(
+      body.position.x * dpr,
+      (stageH - body.position.y) * dpr,
+      p.r * 1.2 * dpr * wf,
+      0
     );
     bi++;
   }
@@ -505,10 +475,6 @@ function frame() {
   textTexture.needsUpdate = true;
 
   renderer.render(scene, camera);
-
-  // 装飾バブル（フォグの上・専用レイヤー）
-  dctx.clearRect(0, 0, stageW, stageH);
-  updateDecoBubbles(now);
 
   // 粒子（最前面）
   octx.clearRect(0, 0, stageW, stageH);
@@ -596,6 +562,7 @@ overlay.addEventListener('pointerup', () => {
     const dx = lpBody.position.x - (lpPoint ? lpPoint.x : lpBody.position.x);
     const dy = lpBody.position.y - (lpPoint ? lpPoint.y : lpBody.position.y);
     const d  = Math.hypot(dx, dy) || 1;
+    lpBody.plugin.fastUntil = performance.now() + 700;
     Body.setVelocity(lpBody, {
       x: lpBody.velocity.x + (dx / d) * 4.0,
       y: lpBody.velocity.y + (dy / d) * 4.0,
@@ -610,6 +577,7 @@ overlay.addEventListener('pointerup', () => {
       if (dist < 500) {
         const str = Math.pow(1 - dist / 500, 2);
         body.plugin.wobble = Math.max(body.plugin.wobble, 0.8 * str);
+        body.plugin.fastUntil = performance.now() + 400;
         const nd = dist || 1;
         Body.setVelocity(body, {
           x: body.velocity.x + (nx / nd) * str * 2.2,
