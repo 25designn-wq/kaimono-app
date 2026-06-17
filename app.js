@@ -221,6 +221,12 @@ overlay.id = 'overlay';
 stage.appendChild(overlay);
 const octx = overlay.getContext('2d');
 
+// ===== 装飾バブル専用レイヤー（フォグより上・z-index 4）=====
+const decoCanvas = document.createElement('canvas');
+decoCanvas.id = 'deco';
+stage.appendChild(decoCanvas);
+const dctx = decoCanvas.getContext('2d');
+
 // ===== 文字テクスチャ（WebGLで屈折させるためのオフスクリーン）=====
 const textCanvas = document.createElement('canvas');
 const tctx = textCanvas.getContext('2d');
@@ -244,6 +250,12 @@ function resizeStage() {
   overlay.style.width = stageW + 'px';
   overlay.style.height = stageH + 'px';
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  decoCanvas.width = stageW * dpr;
+  decoCanvas.height = stageH * dpr;
+  decoCanvas.style.width = stageW + 'px';
+  decoCanvas.style.height = stageH + 'px';
+  dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   textCanvas.width  = stageW * dpr;
   textCanvas.height = stageH * dpr;
@@ -352,25 +364,25 @@ const decoBubbles = [];
 let lastDecoSpawn = 0;
 
 function drawDecoBubble(cx, cy, r, alpha) {
-  const g = octx.createRadialGradient(cx - r*0.3, cy - r*0.35, r*0.05, cx, cy, r);
+  const g = dctx.createRadialGradient(cx - r*0.3, cy - r*0.35, r*0.05, cx, cy, r);
   g.addColorStop(0,    `rgba(255,255,255,${alpha * 0.60})`);
   g.addColorStop(0.45, `rgba(210,225,245,${alpha * 0.22})`);
   g.addColorStop(1,    `rgba(180,200,230,${alpha * 0.06})`);
-  octx.beginPath();
-  octx.arc(cx, cy, r, 0, Math.PI * 2);
-  octx.fillStyle = g;
-  octx.fill();
-  octx.strokeStyle = `rgba(255,255,255,${alpha * 0.50})`;
-  octx.lineWidth = Math.max(0.5, r * 0.08);
-  octx.stroke();
+  dctx.beginPath();
+  dctx.arc(cx, cy, r, 0, Math.PI * 2);
+  dctx.fillStyle = g;
+  dctx.fill();
+  dctx.strokeStyle = `rgba(255,255,255,${alpha * 0.50})`;
+  dctx.lineWidth = Math.max(0.5, r * 0.08);
+  dctx.stroke();
   const sr = r * 0.22;
-  const sh = octx.createRadialGradient(cx - r*0.28, cy - r*0.30, 0, cx - r*0.28, cy - r*0.30, sr);
+  const sh = dctx.createRadialGradient(cx - r*0.28, cy - r*0.30, 0, cx - r*0.28, cy - r*0.30, sr);
   sh.addColorStop(0, `rgba(255,255,255,${alpha * 0.80})`);
   sh.addColorStop(1, 'rgba(255,255,255,0)');
-  octx.beginPath();
-  octx.arc(cx - r*0.28, cy - r*0.30, sr, 0, Math.PI * 2);
-  octx.fillStyle = sh;
-  octx.fill();
+  dctx.beginPath();
+  dctx.arc(cx - r*0.28, cy - r*0.30, sr, 0, Math.PI * 2);
+  dctx.fillStyle = sh;
+  dctx.fill();
 }
 
 function updateDecoBubbles(now) {
@@ -414,7 +426,7 @@ function frame() {
   let bi = 0;
   for (const { body, item } of bubbles.values()) {
     if (bi >= MAX_B) break;
-    const wf = 1 + body.plugin.wobble * 0.15 * Math.sin(now / 1000 * 15 + body.plugin.phase);
+    const wf = 1 + body.plugin.wobble * 0.22 * Math.sin(now / 1000 * 15 + body.plugin.phase);
     foamUniforms.uBubbles.value[bi].set(
       body.position.x * dpr,
       (stageH - body.position.y) * dpr,
@@ -453,15 +465,11 @@ function frame() {
     tctx.beginPath();
     tctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
     tctx.clip();
-    // チャコールグレー＋揺らぐ色（振幅・速度強化）
+    // チャコールグレー固定（屈折・色収差はシェーダーが担当）
+    tctx.fillStyle = 'rgb(58, 63, 74)';
+    // 泡の中で漂うドリフト（位置変化がシェーダーの屈折に反映される）
     const ph  = body.plugin.phase;
     const nt  = now / 1000;
-    const flk = 30;
-    const rch = Math.max(30, Math.min(120, Math.round(56 + Math.sin(nt * 3.1 + ph) * flk)));
-    const gch = Math.max(30, Math.min(120, Math.round(61 + Math.sin(nt * 2.3 + ph + 1.0) * flk)));
-    const bch = Math.max(30, Math.min(120, Math.round(72 + Math.sin(nt * 2.7 + ph + 2.0) * flk)));
-    tctx.fillStyle = `rgb(${rch},${gch},${bch})`;
-    // 泡の中で漂うドリフト（屈折レンズを通して揺れて見える）
     const textCx = x + Math.sin(nt * 1.1 + ph) * 2.5;
     const textCy = y + Math.cos(nt * 0.7 + ph * 1.3) * 1.8;
     tctx.textBaseline = 'middle';
@@ -498,9 +506,12 @@ function frame() {
 
   renderer.render(scene, camera);
 
-  // 粒子＋装飾バブル（最前面）
-  octx.clearRect(0, 0, stageW, stageH);
+  // 装飾バブル（フォグの上・専用レイヤー）
+  dctx.clearRect(0, 0, stageW, stageH);
   updateDecoBubbles(now);
+
+  // 粒子（最前面）
+  octx.clearRect(0, 0, stageW, stageH);
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx; p.y += p.vy; p.vy += 0.10; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.028;
@@ -557,7 +568,7 @@ undoBtnEl.addEventListener('click', () => {
 });
 
 // ===== 短押し → プルプル ／ 長押し（700ms）→ 弾ける =====
-const LONG_PRESS_MS = 700;
+const LONG_PRESS_MS = 500;
 let lpBody = null, lpStart = 0, lpAutoTimer = null, lpPoint = null;
 
 overlay.addEventListener('pointerdown', e => {
@@ -586,23 +597,23 @@ overlay.addEventListener('pointerup', () => {
     const dy = lpBody.position.y - (lpPoint ? lpPoint.y : lpBody.position.y);
     const d  = Math.hypot(dx, dy) || 1;
     Body.setVelocity(lpBody, {
-      x: lpBody.velocity.x + (dx / d) * 2.2,
-      y: lpBody.velocity.y + (dy / d) * 2.2,
+      x: lpBody.velocity.x + (dx / d) * 4.0,
+      y: lpBody.velocity.y + (dy / d) * 4.0,
     });
-    lpBody.plugin.wobble = Math.max(lpBody.plugin.wobble, 0.5);
-    // 近くのバブルへ距離の2乗で減衰して伝播
+    lpBody.plugin.wobble = Math.max(lpBody.plugin.wobble, 0.8);
+    // 近くのバブルへ距離の2乗で減衰して伝播（大胆に）
     const { x: tx, y: ty } = lpBody.position;
     for (const { body } of bubbles.values()) {
       if (body === lpBody) continue;
       const nx = body.position.x - tx, ny = body.position.y - ty;
       const dist = Math.hypot(nx, ny);
-      if (dist < 300) {
-        const str = Math.pow(1 - dist / 300, 2);
-        body.plugin.wobble = Math.max(body.plugin.wobble, 0.5 * str);
+      if (dist < 500) {
+        const str = Math.pow(1 - dist / 500, 2);
+        body.plugin.wobble = Math.max(body.plugin.wobble, 0.8 * str);
         const nd = dist || 1;
         Body.setVelocity(body, {
-          x: body.velocity.x + (nx / nd) * str * 0.7,
-          y: body.velocity.y + (ny / nd) * str * 0.7,
+          x: body.velocity.x + (nx / nd) * str * 2.2,
+          y: body.velocity.y + (ny / nd) * str * 2.2,
         });
       }
     }
