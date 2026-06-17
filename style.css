@@ -81,25 +81,6 @@ body {
 #empty-hint p { font-size: 19px; font-weight: 300; }
 #empty-hint .sub { font-size: 14px; margin-top: 6px; opacity: 0.7; }
 
-/* 最近買ったもの ボタン */
-#recent-btn {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
-  right: 14px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255,255,255,0.9);
-  color: var(--text-dim);
-  font-size: 20px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  z-index: 10;
-}
-#recent-btn:active { background: #fff; }
-
 /* 入力（フローティングのすりガラス）*/
 #add-form {
   position: absolute;
@@ -195,75 +176,45 @@ body {
 .urgency-opt[data-urgency="soon"]    { background: #d99a2b; color: #2a2410; }
 .urgency-opt[data-urgency="hurry"]   { background: #c0392b; }
 
-/* 最近買ったもの パネル */
-#recent-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.panel-overlay {
+/* よく買うもの カプセルストリップ */
+#freq-strip {
   position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-}
-.panel-content {
-  position: relative;
-  width: 100%;
-  max-width: 430px;
-  background: var(--surface);
-  border-radius: 18px 18px 0 0;
-  padding: 20px 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
-  max-height: 70vh;
-  overflow-y: auto;
-  animation: slideUp 0.25s ease;
-}
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
-.panel-content h3 {
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 14px;
-  color: var(--text);
-}
-#recent-list { list-style: none; }
-#recent-list li {
+  left: 14px;
+  right: 14px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 4px;
-  border-bottom: 1px solid var(--border);
-  font-size: 16px;
+  gap: 8px;
+  padding: 2px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  z-index: 24;
 }
-#recent-list .empty { color: var(--text-dim); justify-content: center; border: none; }
-#recent-list button {
-  border: 1px solid var(--border);
-  background: transparent;
+#freq-strip::-webkit-scrollbar { display: none; }
+.freq-cap {
+  flex-shrink: 0;
+  padding: 9px 17px;
+  border-radius: 30px;
+  background: rgba(255,255,255,0.50);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.70);
+  box-shadow: 0 6px 20px rgba(40,50,70,0.18);
   color: var(--text);
   font-family: inherit;
-  font-size: 13px;
-  padding: 6px 14px;
-  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
 }
-#recent-list button:active { background: rgba(0,0,0,0.05); }
-#recent-close {
-  width: 100%;
-  margin-top: 16px;
-  padding: 13px;
-  border: none;
-  border-radius: 12px;
-  background: #f0f2f7;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+.freq-cap:active { background: rgba(255,255,255,0.75); transform: scale(0.94); }
+
+/* freq strip が表示されているとき、入力バーを上にずらす */
+#add-form { transition: bottom 0.22s ease; }
+#app.has-freq #add-form {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
 }
+#app.has-freq { --bar-height: 156px; }
 
 /* アンドゥトースト */
 #undo-toast {

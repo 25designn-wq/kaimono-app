@@ -606,15 +606,11 @@ async function undoBought(id) {
 }
 
 // ===== 同期 =====
-let recentItems = [];
 itemsRef.onSnapshot(snap => {
   const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   syncBubbles(all.filter(i => !i.bought));
-  recentItems = all
-    .filter(i => i.bought)
-    .sort((a, b) => (b.boughtAt?.toMillis?.() || 0) - (a.boughtAt?.toMillis?.() || 0))
-    .slice(0, 10);
-  if (!document.getElementById('recent-panel').classList.contains('hidden')) renderRecent();
+  const boughtItems = all.filter(i => i.bought);
+  renderFreqStrip(computeFreqItems(boughtItems));
 });
 
 // ===== 入力（＋ → 緊急度ポップ → 登録）=====
@@ -653,36 +649,38 @@ document.querySelectorAll('.urgency-opt').forEach(opt => {
   });
 });
 
-// ===== 最近買ったもの =====
-const recentPanel = document.getElementById('recent-panel');
-function renderRecent() {
-  const ul = document.getElementById('recent-list');
-  ul.innerHTML = '';
-  if (recentItems.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'まだありません';
-    ul.appendChild(li);
+// ===== よく買うもの =====
+function computeFreqItems(boughtItems) {
+  const counts = {};
+  for (const item of boughtItems) counts[item.name] = (counts[item.name] || 0) + 1;
+  return Object.entries(counts)
+    .filter(([, c]) => c >= 5)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name]) => name);
+}
+
+function renderFreqStrip(names) {
+  const strip = document.getElementById('freq-strip');
+  const app   = document.getElementById('app');
+  strip.innerHTML = '';
+  if (names.length === 0) {
+    strip.classList.add('hidden');
+    app.classList.remove('has-freq');
     return;
   }
-  for (const item of recentItems) {
-    const li = document.createElement('li');
-    const span = document.createElement('span');
-    span.textContent = item.name;
+  app.classList.add('has-freq');
+  strip.classList.remove('hidden');
+  for (const name of names) {
     const btn = document.createElement('button');
-    btn.textContent = '戻す';
-    btn.addEventListener('click', () => undoBought(item.id));
-    li.appendChild(span);
-    li.appendChild(btn);
-    ul.appendChild(li);
+    btn.className = 'freq-cap';
+    btn.textContent = name;
+    btn.addEventListener('click', () => {
+      document.getElementById('item-input').value = name;
+      document.getElementById('item-input').focus();
+    });
+    strip.appendChild(btn);
   }
 }
-document.getElementById('recent-btn').addEventListener('click', () => {
-  renderRecent();
-  recentPanel.classList.remove('hidden');
-});
-document.getElementById('recent-close').addEventListener('click', () => recentPanel.classList.add('hidden'));
-document.querySelector('.panel-overlay').addEventListener('click', () => recentPanel.classList.add('hidden'));
 
 // ===== 傾き =====
 let tiltEnabled = false;
