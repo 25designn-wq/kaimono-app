@@ -347,6 +347,65 @@ function spawnParticles(x, y, color, r) {
   }
 }
 
+// ===== 装飾バブル（下部フォグゾーンに湧く小さな泡）=====
+const decoBubbles = [];
+let lastDecoSpawn = 0;
+
+function drawDecoBubble(cx, cy, r, alpha) {
+  const g = octx.createRadialGradient(cx - r*0.3, cy - r*0.35, r*0.05, cx, cy, r);
+  g.addColorStop(0,    `rgba(255,255,255,${alpha * 0.60})`);
+  g.addColorStop(0.45, `rgba(210,225,245,${alpha * 0.22})`);
+  g.addColorStop(1,    `rgba(180,200,230,${alpha * 0.06})`);
+  octx.beginPath();
+  octx.arc(cx, cy, r, 0, Math.PI * 2);
+  octx.fillStyle = g;
+  octx.fill();
+  octx.strokeStyle = `rgba(255,255,255,${alpha * 0.50})`;
+  octx.lineWidth = Math.max(0.5, r * 0.08);
+  octx.stroke();
+  const sr = r * 0.22;
+  const sh = octx.createRadialGradient(cx - r*0.28, cy - r*0.30, 0, cx - r*0.28, cy - r*0.30, sr);
+  sh.addColorStop(0, `rgba(255,255,255,${alpha * 0.80})`);
+  sh.addColorStop(1, 'rgba(255,255,255,0)');
+  octx.beginPath();
+  octx.arc(cx - r*0.28, cy - r*0.30, sr, 0, Math.PI * 2);
+  octx.fillStyle = sh;
+  octx.fill();
+}
+
+function updateDecoBubbles(now) {
+  if (now - lastDecoSpawn > 380 && decoBubbles.length < 20) {
+    const r = 3 + Math.random() * 9;
+    decoBubbles.push({
+      x: r + Math.random() * (stageW - r * 2),
+      y: stageH - r * 0.5,
+      r,
+      vx: (Math.random() - 0.5) * 0.22,
+      vy: -(0.28 + Math.random() * 0.42),
+      phase: Math.random() * Math.PI * 2,
+      alpha: 0,
+      maxAlpha: 0.50 + Math.random() * 0.30,
+    });
+    lastDecoSpawn = now;
+  }
+  const ceiling = stageH - BAR_ZONE;
+  for (let i = decoBubbles.length - 1; i >= 0; i--) {
+    const db = decoBubbles[i];
+    db.y += db.vy;
+    db.x += db.vx + Math.sin(now / 1400 + db.phase) * 0.16;
+    const distToCeil = db.y - ceiling;
+    if (distToCeil > db.r * 4) {
+      db.alpha = Math.min(db.alpha + 0.018, db.maxAlpha);
+    } else {
+      db.alpha = Math.max(0, db.alpha - 0.025);
+    }
+    if ((db.alpha <= 0 && distToCeil < db.r) || db.x < -db.r*2 || db.x > stageW + db.r*2) {
+      decoBubbles.splice(i, 1); continue;
+    }
+    drawDecoBubble(db.x, db.y, db.r, db.alpha);
+  }
+}
+
 // ===== 描画ループ =====
 function frame() {
   const now = performance.now();
@@ -394,14 +453,17 @@ function frame() {
     tctx.beginPath();
     tctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
     tctx.clip();
-    // チャコールグレー＋バブルごとの位相でゆっくり揺らぐ色
+    // チャコールグレー＋揺らぐ色（振幅・速度強化）
     const ph  = body.plugin.phase;
     const nt  = now / 1000;
-    const flk = 16;
-    const rch = Math.max(30, Math.min(120, Math.round(56 + Math.sin(nt * 1.3 + ph) * flk)));
-    const gch = Math.max(30, Math.min(120, Math.round(61 + Math.sin(nt * 0.9 + ph + 1.0) * flk)));
-    const bch = Math.max(30, Math.min(120, Math.round(72 + Math.sin(nt * 1.1 + ph + 2.0) * flk)));
+    const flk = 30;
+    const rch = Math.max(30, Math.min(120, Math.round(56 + Math.sin(nt * 3.1 + ph) * flk)));
+    const gch = Math.max(30, Math.min(120, Math.round(61 + Math.sin(nt * 2.3 + ph + 1.0) * flk)));
+    const bch = Math.max(30, Math.min(120, Math.round(72 + Math.sin(nt * 2.7 + ph + 2.0) * flk)));
     tctx.fillStyle = `rgb(${rch},${gch},${bch})`;
+    // 泡の中で漂うドリフト（屈折レンズを通して揺れて見える）
+    const textCx = x + Math.sin(nt * 1.1 + ph) * 2.5;
+    const textCy = y + Math.cos(nt * 0.7 + ph * 1.3) * 1.8;
     tctx.textBaseline = 'middle';
     tctx.textAlign = 'center';
 
@@ -410,8 +472,8 @@ function frame() {
       for (const ch of text) {
         const cw = tctx.measureText(ch).width;
         const cxp = gx + cw / 2;
-        const dx = cxp - x;
-        const yy = y + curv * dx * dx;            // 湾曲（下に弧）
+        const dx = cxp - textCx;
+        const yy = textCy + curv * dx * dx;            // 湾曲（下に弧）
         const rot = Math.atan(2 * curv * dx);     // 接線方向に回転
         tctx.save();
         tctx.translate(cxp, yy);
@@ -423,12 +485,12 @@ function frame() {
     };
 
     if (fullW <= fitW) {
-      drawCurved(x - fullW / 2);                 // 余白付きで中央に
+      drawCurved(textCx - fullW / 2);                 // 余白付きで中央に
     } else {
       const span = fullW + 40;
       const offset = (now / 22) % span;
-      drawCurved(x - scrollW / 2 - offset);      // 余白なしで流す
-      drawCurved(x - scrollW / 2 - offset + span);
+      drawCurved(textCx - scrollW / 2 - offset);      // 余白なしで流す
+      drawCurved(textCx - scrollW / 2 - offset + span);
     }
     tctx.restore();
   }
@@ -436,8 +498,9 @@ function frame() {
 
   renderer.render(scene, camera);
 
-  // 粒子（最前面）
+  // 粒子＋装飾バブル（最前面）
   octx.clearRect(0, 0, stageW, stageH);
+  updateDecoBubbles(now);
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx; p.y += p.vy; p.vy += 0.10; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.028;
@@ -495,7 +558,7 @@ undoBtnEl.addEventListener('click', () => {
 
 // ===== 短押し → プルプル ／ 長押し（700ms）→ 弾ける =====
 const LONG_PRESS_MS = 700;
-let lpBody = null, lpStart = 0, lpAutoTimer = null;
+let lpBody = null, lpStart = 0, lpAutoTimer = null, lpPoint = null;
 
 overlay.addEventListener('pointerdown', e => {
   if (!urgencyPop.classList.contains('hidden')) { closeUrgencyPop(); return; }
@@ -503,7 +566,7 @@ overlay.addEventListener('pointerdown', e => {
   const pt   = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   const hit  = Query.point([...bubbles.values()].map(b => b.body), pt)[0];
   if (!hit) return;
-  lpBody = hit; lpStart = performance.now();
+  lpBody = hit; lpStart = performance.now(); lpPoint = pt;
   lpAutoTimer = setTimeout(() => {
     if (lpBody === hit) {
       const item = hit.plugin.item;
@@ -518,13 +581,31 @@ overlay.addEventListener('pointerdown', e => {
 overlay.addEventListener('pointerup', () => {
   clearTimeout(lpAutoTimer);
   if (lpBody && performance.now() - lpStart < LONG_PRESS_MS) {
-    // 短押し → プルプル（ランダムな速度インパルス＋wobble）
-    const angle = Math.random() * Math.PI * 2;
+    // タッチ位置→バブル中心の方向に突き飛ばす（物理的な突き）
+    const dx = lpBody.position.x - (lpPoint ? lpPoint.x : lpBody.position.x);
+    const dy = lpBody.position.y - (lpPoint ? lpPoint.y : lpBody.position.y);
+    const d  = Math.hypot(dx, dy) || 1;
     Body.setVelocity(lpBody, {
-      x: lpBody.velocity.x + Math.cos(angle) * 1.3,
-      y: lpBody.velocity.y + Math.sin(angle) * 1.3,
+      x: lpBody.velocity.x + (dx / d) * 2.2,
+      y: lpBody.velocity.y + (dy / d) * 2.2,
     });
     lpBody.plugin.wobble = Math.max(lpBody.plugin.wobble, 0.5);
+    // 近くのバブルへ距離の2乗で減衰して伝播
+    const { x: tx, y: ty } = lpBody.position;
+    for (const { body } of bubbles.values()) {
+      if (body === lpBody) continue;
+      const nx = body.position.x - tx, ny = body.position.y - ty;
+      const dist = Math.hypot(nx, ny);
+      if (dist < 300) {
+        const str = Math.pow(1 - dist / 300, 2);
+        body.plugin.wobble = Math.max(body.plugin.wobble, 0.5 * str);
+        const nd = dist || 1;
+        Body.setVelocity(body, {
+          x: body.velocity.x + (nx / nd) * str * 0.7,
+          y: body.velocity.y + (ny / nd) * str * 0.7,
+        });
+      }
+    }
   }
   lpBody = null;
 });
