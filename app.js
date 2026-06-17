@@ -15,9 +15,9 @@ const TS        = firebase.firestore.FieldValue.serverTimestamp;
 
 // ===== 緊急度 =====
 const URGENCY = {
-  anytime: { sizeMult: 0.8,  color: [92, 156, 200],  text: '#ffffff' }, // 青
-  soon:    { sizeMult: 1.0,  color: [224, 168, 64],   text: '#2a2410' }, // 黄
-  hurry:   { sizeMult: 1.28, color: [214, 78, 64],    text: '#ffffff' }, // 赤
+  anytime: { sizeMult: 0.8,  color: [92, 156, 200],  text: '#34383f' }, // 青
+  soon:    { sizeMult: 1.0,  color: [224, 168, 64],   text: '#34383f' }, // 黄
+  hurry:   { sizeMult: 1.28, color: [214, 78, 64],    text: '#34383f' }, // 赤
 };
 const urgencyOf = item => (URGENCY[item.urgency] ? item.urgency : 'anytime');
 
@@ -62,13 +62,15 @@ engine.gravity.scale = 0;
 const runner = Runner.create();
 Runner.run(runner, engine);
 
+const BAR_ZONE = 115; // 入力バー領域：泡が物理的に入り込まない高さ
+
 let walls = [];
 function buildWalls() {
   if (walls.length) World.remove(engine.world, walls);
   const t = 120, opt = { isStatic: true };
   walls = [
     Bodies.rectangle(stageW / 2, -t / 2, stageW + t * 2, t, opt),
-    Bodies.rectangle(stageW / 2, stageH + t / 2, stageW + t * 2, t, opt),
+    Bodies.rectangle(stageW / 2, stageH - BAR_ZONE + t / 2, stageW + t * 2, t, opt),
     Bodies.rectangle(-t / 2, stageH / 2, t, stageH + t * 2, opt),
     Bodies.rectangle(stageW + t / 2, stageH / 2, t, stageH + t * 2, opt),
   ];
@@ -353,10 +355,11 @@ function frame() {
   let bi = 0;
   for (const { body, item } of bubbles.values()) {
     if (bi >= MAX_B) break;
+    const wf = 1 + body.plugin.wobble * 0.15 * Math.sin(now / 1000 * 15 + body.plugin.phase);
     foamUniforms.uBubbles.value[bi].set(
       body.position.x * dpr,
       (stageH - body.position.y) * dpr,
-      body.plugin.r * 1.2 * dpr,   // 描画は少し大きく＝隣と重なって膜ができる
+      body.plugin.r * 1.2 * dpr * wf, // wobble で微振動
       urgencyIndex(item)
     );
     bi++;
@@ -391,7 +394,14 @@ function frame() {
     tctx.beginPath();
     tctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
     tctx.clip();
-    tctx.fillStyle = u.text;
+    // チャコールグレー＋バブルごとの位相でゆっくり揺らぐ色
+    const ph  = body.plugin.phase;
+    const nt  = now / 1000;
+    const flk = 16;
+    const rch = Math.max(30, Math.min(120, Math.round(56 + Math.sin(nt * 1.3 + ph) * flk)));
+    const gch = Math.max(30, Math.min(120, Math.round(61 + Math.sin(nt * 0.9 + ph + 1.0) * flk)));
+    const bch = Math.max(30, Math.min(120, Math.round(72 + Math.sin(nt * 1.1 + ph + 2.0) * flk)));
+    tctx.fillStyle = `rgb(${rch},${gch},${bch})`;
     tctx.textBaseline = 'middle';
     tctx.textAlign = 'center';
 
@@ -451,13 +461,77 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
-// ===== タップで弾ける（オーバーレイが最前面）=====
+// ===== アンドゥトースト =====
+const undoToastEl    = document.getElementById('undo-toast');
+const undoLabelEl    = document.getElementById('undo-label');
+const undoBtnEl      = document.getElementById('undo-btn');
+let undoTargetItem   = null;
+let undoHideTimer    = null;
+let undoDismissTimer = null;
+
+function showUndoToast(item) {
+  undoTargetItem = item;
+  undoLabelEl.textContent = `「${item.name}」を消した`;
+  clearTimeout(undoHideTimer);
+  clearTimeout(undoDismissTimer);
+  undoToastEl.classList.remove('hidden', 'fading');
+  undoHideTimer = setTimeout(hideUndoToast, 5000);
+}
+function hideUndoToast() {
+  undoToastEl.classList.add('fading');
+  undoDismissTimer = setTimeout(() => {
+    undoToastEl.classList.add('hidden');
+    undoTargetItem = null;
+  }, 300);
+}
+undoBtnEl.addEventListener('click', () => {
+  if (!undoTargetItem) return;
+  undoBought(undoTargetItem.id);
+  clearTimeout(undoHideTimer);
+  clearTimeout(undoDismissTimer);
+  undoToastEl.classList.add('hidden');
+  undoTargetItem = null;
+});
+
+// ===== 短押し → プルプル ／ 長押し（700ms）→ 弾ける =====
+const LONG_PRESS_MS = 700;
+let lpBody = null, lpStart = 0, lpAutoTimer = null;
+
 overlay.addEventListener('pointerdown', e => {
   if (!urgencyPop.classList.contains('hidden')) { closeUrgencyPop(); return; }
   const rect = overlay.getBoundingClientRect();
-  const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  const hit = Query.point([...bubbles.values()].map(b => b.body), pt)[0];
-  if (hit) { removeBubble(hit.plugin.id, true); markBought(hit.plugin.id); }
+  const pt   = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const hit  = Query.point([...bubbles.values()].map(b => b.body), pt)[0];
+  if (!hit) return;
+  lpBody = hit; lpStart = performance.now();
+  lpAutoTimer = setTimeout(() => {
+    if (lpBody === hit) {
+      const item = hit.plugin.item;
+      removeBubble(hit.plugin.id, true);
+      markBought(hit.plugin.id);
+      showUndoToast(item);
+      lpBody = null;
+    }
+  }, LONG_PRESS_MS);
+});
+
+overlay.addEventListener('pointerup', () => {
+  clearTimeout(lpAutoTimer);
+  if (lpBody && performance.now() - lpStart < LONG_PRESS_MS) {
+    // 短押し → プルプル（ランダムな速度インパルス＋wobble）
+    const angle = Math.random() * Math.PI * 2;
+    Body.setVelocity(lpBody, {
+      x: lpBody.velocity.x + Math.cos(angle) * 1.3,
+      y: lpBody.velocity.y + Math.sin(angle) * 1.3,
+    });
+    lpBody.plugin.wobble = Math.max(lpBody.plugin.wobble, 0.5);
+  }
+  lpBody = null;
+});
+
+overlay.addEventListener('pointercancel', () => {
+  clearTimeout(lpAutoTimer);
+  lpBody = null;
 });
 
 // ===== Firestore CRUD =====
