@@ -505,13 +505,13 @@ requestAnimationFrame(frame);
 const undoToastEl    = document.getElementById('undo-toast');
 const undoLabelEl    = document.getElementById('undo-label');
 const undoBtnEl      = document.getElementById('undo-btn');
-let undoTargetItem   = null;
+let undoOnClick      = null;
 let undoHideTimer    = null;
 let undoDismissTimer = null;
 
-function showUndoToast(item) {
-  undoTargetItem = item;
-  undoLabelEl.textContent = `「${item.name}」を消した`;
+function showUndoToast(label, onUndo) {
+  undoOnClick = onUndo;
+  undoLabelEl.textContent = label;
   clearTimeout(undoHideTimer);
   clearTimeout(undoDismissTimer);
   undoToastEl.classList.remove('hidden', 'fading');
@@ -521,16 +521,16 @@ function hideUndoToast() {
   undoToastEl.classList.add('fading');
   undoDismissTimer = setTimeout(() => {
     undoToastEl.classList.add('hidden');
-    undoTargetItem = null;
+    undoOnClick = null;
   }, 300);
 }
 undoBtnEl.addEventListener('click', () => {
-  if (!undoTargetItem) return;
-  undoBought(undoTargetItem.id);
+  if (!undoOnClick) return;
+  undoOnClick();
   clearTimeout(undoHideTimer);
   clearTimeout(undoDismissTimer);
   undoToastEl.classList.add('hidden');
-  undoTargetItem = null;
+  undoOnClick = null;
 });
 
 // ===== 短押し → プルプル ／ 長押し（700ms）→ 弾ける =====
@@ -549,7 +549,7 @@ overlay.addEventListener('pointerdown', e => {
       const item = hit.plugin.item;
       removeBubble(hit.plugin.id, true);
       markBought(hit.plugin.id);
-      showUndoToast(item);
+      showUndoToast(`「${item.name}」を消した`, () => undoBought(item.id));
       lpBody = null;
     }
   }, LONG_PRESS_MS);
@@ -606,11 +606,12 @@ async function undoBought(id) {
 }
 
 // ===== 同期 =====
+let lastBoughtItems = [];
 itemsRef.onSnapshot(snap => {
   const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   syncBubbles(all.filter(i => !i.bought));
-  const boughtItems = all.filter(i => i.bought);
-  renderFreqStrip(computeFreqItems(boughtItems));
+  lastBoughtItems = all.filter(i => i.bought);
+  renderFreqStrip(computeFreqItems(lastBoughtItems));
 });
 
 // ===== 入力（＋ → 緊急度ポップ → 登録）=====
@@ -650,32 +651,66 @@ document.querySelectorAll('.urgency-opt').forEach(opt => {
 });
 
 // ===== よく買うもの =====
-function computeFreqItems(boughtItems) {
-  const counts = {};
-  for (const item of boughtItems) counts[item.name] = (counts[item.name] || 0) + 1;
-  return Object.entries(counts)
-    .filter(([, c]) => c >= 5)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name]) => name);
+// カタカナ→ひらがな・全角英数→半角 で表記揺れを吸収（漢字↔かな は辞書/AI必要）
+function normalizeItemName(n) {
+  return n.trim()
+    .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .toLowerCase();
 }
 
-function renderFreqStrip(names) {
+const EXCL_KEY = 'freq_excluded';
+const excludedFreqKeys = new Set(JSON.parse(localStorage.getItem(EXCL_KEY) || '[]'));
+
+function computeFreqItems(boughtItems) {
+  const groups = {};
+  for (const item of boughtItems) {
+    const key = normalizeItemName(item.name);
+    if (!groups[key]) groups[key] = { display: item.name, count: 0, key };
+    groups[key].count++;
+  }
+  return Object.values(groups)
+    .filter(g => g.count >= 5 && !excludedFreqKeys.has(g.key))
+    .sort((a, b) => b.count - a.count)
+    .map(({ display, key }) => ({ display, key }));
+}
+
+let freqLpTimer = null, freqLpFired = false;
+
+function renderFreqStrip(items) {
   const strip = document.getElementById('freq-strip');
   const app   = document.getElementById('app');
   strip.innerHTML = '';
-  if (names.length === 0) {
+  if (items.length === 0) {
     strip.classList.add('hidden');
     app.classList.remove('has-freq');
     return;
   }
   app.classList.add('has-freq');
   strip.classList.remove('hidden');
-  for (const name of names) {
+  for (const { display, key } of items) {
     const btn = document.createElement('button');
     btn.className = 'freq-cap';
-    btn.textContent = name;
+    btn.textContent = display;
+    btn.addEventListener('pointerdown', () => {
+      freqLpFired = false;
+      freqLpTimer = setTimeout(() => {
+        freqLpFired = true;
+        excludedFreqKeys.add(key);
+        localStorage.setItem(EXCL_KEY, JSON.stringify([...excludedFreqKeys]));
+        renderFreqStrip(computeFreqItems(lastBoughtItems));
+        showUndoToast(`「${display}」を非表示に`, () => {
+          excludedFreqKeys.delete(key);
+          localStorage.setItem(EXCL_KEY, JSON.stringify([...excludedFreqKeys]));
+          renderFreqStrip(computeFreqItems(lastBoughtItems));
+        });
+      }, 500);
+    });
+    btn.addEventListener('pointerup',     () => clearTimeout(freqLpTimer));
+    btn.addEventListener('pointercancel', () => clearTimeout(freqLpTimer));
     btn.addEventListener('click', () => {
-      document.getElementById('item-input').value = name;
+      if (freqLpFired) return;
+      document.getElementById('item-input').value = display;
       document.getElementById('item-input').focus();
     });
     strip.appendChild(btn);
